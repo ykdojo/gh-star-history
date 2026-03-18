@@ -1,0 +1,27 @@
+{
+  "name": "gh-star-history",
+  "version": "1.0.0",
+  "description": "Visualize GitHub star history with interactive charts, powered by gh CLI",
+  "bin": {
+    "gh-star-history": "./bin/cli.js"
+  },
+  "keywords": [
+    "github",
+    "stars",
+    "star-history",
+    "visualization",
+    "cli",
+    "plotly"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ykdojo/gh-star-history"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "files": [
+    "bin/"
+  ]
+}
