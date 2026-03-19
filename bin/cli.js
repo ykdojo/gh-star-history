@@ -363,7 +363,7 @@ const chartTitle = multiMode
 
 const chartSubtitle = multiMode
   ? repoData.map(d => `<a href="https://github.com/${d.repo}" target="_blank" style="color:#8b949e">${d.repo}</a>`).join(' vs ')
-  : `${d0.displayCount.toLocaleString()} stars`;
+  : `${d0.displayCount.toLocaleString()} stars · <span id="rate"></span>`;
 
 const granularityToggle = multiMode ? '' : `
     <span style="margin-left: 12px; border-left: 1px solid #30363d; padding-left: 16px;">
@@ -557,6 +557,29 @@ if (!multiMode) {
   const d = repoData[0];
   const barIndex = traces.length - 1;
 
+  let currentRange = 'all';
+
+  function updateRate() {
+    const rateEl = document.getElementById('rate');
+    if (!rateEl) return;
+    const rangeStart = ranges[currentRange] ? new Date(ranges[currentRange][0]).getTime() : new Date(d.dates[0]).getTime();
+    const rangeEnd = ranges[currentRange] ? new Date(ranges[currentRange][1]).getTime() : new Date(d.dates[d.dates.length - 1]).getTime();
+    let starsInRange = 0;
+    for (let i = 0; i < d.dates.length; i++) {
+      const t = new Date(d.dates[i]).getTime();
+      if (t >= rangeStart && t <= rangeEnd) starsInRange++;
+    }
+    const hours = (rangeEnd - rangeStart) / (1000 * 60 * 60);
+    if (currentBar === 'hourly') {
+      const perHour = hours > 0 ? (starsInRange / hours).toFixed(2) : '0';
+      rateEl.textContent = perHour + ' stars/hour';
+    } else {
+      const days = hours / 24;
+      const perDay = days > 0 ? (starsInRange / days).toFixed(1) : '0';
+      rateEl.textContent = perDay + ' stars/day';
+    }
+  }
+
   function setGranularity(granularity) {
     if (granularity === currentBar) return;
     if (granularity === 'hourly') {
@@ -568,6 +591,7 @@ if (!multiMode) {
     document.querySelectorAll('[data-granularity]').forEach(b => b.classList.remove('active'));
     const activeBtn = document.querySelector('[data-granularity="' + granularity + '"]');
     if (activeBtn) activeBtn.classList.add('active');
+    updateRate();
   }
 
   // Granularity toggle handlers
@@ -586,19 +610,23 @@ if (!multiMode) {
     btn.addEventListener('click', () => {
       document.querySelectorAll('[data-range]').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      const r = btn.dataset.range;
-      const autoGranularity = (r === 'day' || r === 'week') ? 'hourly' : 'daily';
+      currentRange = btn.dataset.range;
+      const autoGranularity = (currentRange === 'day' || currentRange === 'week') ? 'hourly' : 'daily';
       setGranularity(autoGranularity);
+      updateRate();
       requestAnimationFrame(() => {
         const y2Title = currentBar === 'hourly' ? 'Stars / Hour' : 'Stars / Day';
-        if (ranges[r]) {
-          Plotly.relayout(chartEl, { 'xaxis.autorange': false, 'xaxis.range': ranges[r], 'yaxis2.title.text': y2Title });
+        if (ranges[currentRange]) {
+          Plotly.relayout(chartEl, { 'xaxis.autorange': false, 'xaxis.range': ranges[currentRange], 'yaxis2.title.text': y2Title });
         } else {
           Plotly.relayout(chartEl, { 'xaxis.autorange': true, 'yaxis2.title.text': y2Title });
         }
       });
     });
   });
+
+  // Initial rate
+  updateRate();
 } else {
   // Range button handlers (multi-mode, no granularity)
   document.querySelectorAll('[data-range]').forEach(btn => {
