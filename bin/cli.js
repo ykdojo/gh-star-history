@@ -420,6 +420,7 @@ const html = `<!DOCTYPE html>
   <div class="subtitle">${chartSubtitle}</div>
   <div class="range-buttons">
     <button class="range-btn active" data-range="all">All Time</button>
+    <button class="range-btn" data-range="year">Past Year</button>
     <button class="range-btn" data-range="month">Past Month</button>
     <button class="range-btn" data-range="week">Past Week</button>
     <button class="range-btn" data-range="day">Past 24h</button>${granularityToggle}
@@ -506,6 +507,7 @@ const lastDateStr = allDates[allDates.length - 1];
 const lastDate = new Date(lastDateStr).getTime();
 const ranges = {
   all: null,
+  year: [new Date(lastDate - 365*24*60*60*1000).toISOString(), lastDateStr],
   month: [new Date(lastDate - 30*24*60*60*1000).toISOString(), lastDateStr],
   week: [new Date(lastDate - 7*24*60*60*1000).toISOString(), lastDateStr],
   day: [new Date(lastDate - 24*60*60*1000).toISOString(), lastDateStr],
