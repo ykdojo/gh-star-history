@@ -1,6 +1,8 @@
 # gh-star-history
 
-Visualize any GitHub repo's star history as an interactive chart. Compare multiple repos side by side. Powered by the [GitHub CLI](https://cli.github.com/) - no API tokens to configure.
+Visualize and compare GitHub star history as interactive charts. Powered by the [GitHub CLI](https://cli.github.com/) - no API tokens needed.
+
+For example, if you want to see the star growth of [claude-code-tips](https://github.com/ykdojo/claude-code-tips):
 
 ```
 npx gh-star-history ykdojo/claude-code-tips
