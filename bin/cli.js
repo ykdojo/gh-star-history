@@ -132,16 +132,23 @@ function shortNum(n) {
 
 // Shared progress state for multi-mode
 const progress = {};
+let progressRendered = false;
 
 function renderProgress() {
-  const parts = repoList.map(repo => {
+  // Move cursor up to overwrite previous lines
+  if (progressRendered) {
+    process.stdout.write(`\x1b[${repoList.length}A`);
+  }
+  for (const repo of repoList) {
     const p = progress[repo];
-    if (!p) return `${repo}: waiting...`;
-    if (p.done) return `${repo}: ${shortNum(p.total)} done`;
-    if (p.error) return `${repo}: error`;
-    return `${repo}: ${shortNum(p.fetched)}/${shortNum(p.total || '?')}`;
-  });
-  process.stdout.write('\r' + parts.join('  |  ') + '\x1b[K');
+    let status;
+    if (!p) status = 'waiting...';
+    else if (p.done) status = `${shortNum(p.total)} done`;
+    else if (p.error) status = 'error';
+    else status = `${shortNum(p.fetched)} / ${shortNum(p.total || '?')}${p.cached ? ' (cached)' : ''}`;
+    process.stdout.write(`\r  ${repo}: ${status}\x1b[K\n`);
+  }
+  progressRendered = true;
 }
 
 // --- Fetch star data ---
@@ -168,7 +175,7 @@ async function fetchRepoStars(repo, onProgress) {
     starCount = null;
   }
 
-  onProgress({ fetched: dateSet.size, total: starCount });
+  onProgress({ fetched: dateSet.size, total: starCount, cached: dateSet.size > 0 });
 
   let page = startPage;
   const perPage = 100;
@@ -272,9 +279,6 @@ async function main() {
         });
       })
     );
-    // Clear progress line
-    process.stdout.write('\n');
-
     for (let i = 0; i < repoList.length; i++) {
       const result = results[i];
       if (result.status === 'fulfilled') {
@@ -291,11 +295,11 @@ async function main() {
     // Single repo - simple per-page progress
     const repo = repoList[0];
     try {
-      console.log(`Fetching star history for ${repo}...`);
       const data = await fetchRepoStars(repo, (p) => {
         const fetched = shortNum(p.fetched);
         const total = p.total ? shortNum(p.total) : '?';
-        process.stdout.write(`\r  ${fetched} / ${total} stars\x1b[K`);
+        const cached = p.cached ? ' (cached)' : '';
+        process.stdout.write(`\r  ${repo}: ${fetched} / ${total} stars${cached}\x1b[K`);
       });
       process.stdout.write('\n');
       if (data.dates.length === 0) {
@@ -303,7 +307,6 @@ async function main() {
         process.exit(1);
       }
       repoData.push({ repo, ...data });
-      console.log(`${data.displayCount.toLocaleString()} stars.`);
     } catch (err) {
       process.stdout.write('\n');
       console.error(`Error: ${err.message}`);
