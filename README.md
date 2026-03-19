@@ -16,6 +16,8 @@ Or compare multiple repos:
 npx gh-star-history vuejs/vue withastro/astro sveltejs/svelte
 ```
 
+![comparison](comparison.png)
+
 Generates a self-contained HTML file with an interactive Plotly chart - hover for details, zoom into spikes, pan across time.
 
 ## Prerequisites
