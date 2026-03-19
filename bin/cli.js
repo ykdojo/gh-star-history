@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 
-const { execSync } = require('child_process');
+const { execSync, exec: execCb } = require('child_process');
+const { promisify } = require('util');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+
+const execAsync = promisify(execCb);
 
 // --- Argument parsing ---
 
@@ -119,7 +122,7 @@ function saveCache(cache) {
 
 const cache = flags.noCache ? {} : loadCache();
 
-function fetchRepoStars(repo) {
+async function fetchRepoStars(repo) {
   // Support both old format (array) and new format ({ dates, starCount })
   const cachedEntry = cache[repo] || {};
   const cachedDates = Array.isArray(cachedEntry) ? cachedEntry : (cachedEntry.dates || []);
@@ -131,11 +134,11 @@ function fetchRepoStars(repo) {
   // Fetch the official star count so we can detect gaps
   let starCount;
   try {
-    const repoJson = execSync(
+    const { stdout } = await execAsync(
       `gh api "repos/${repo}" --jq '.stargazers_count'`,
-      { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
+      { encoding: 'utf8' }
     );
-    starCount = parseInt(repoJson.trim(), 10);
+    starCount = parseInt(stdout.trim(), 10);
     if (isNaN(starCount)) starCount = null;
   } catch {
     starCount = null;
@@ -145,19 +148,20 @@ function fetchRepoStars(repo) {
     const displayCached = cachedStarCount || starCount || cachedDates.length;
     console.log(`[${repo}] Found ${displayCached.toLocaleString()} cached stars. Fetching new stars from page ${startPage}...`);
   } else {
-    console.log(`Fetching star history for ${repo}...`);
+    console.log(`[${repo}] Fetching star history...`);
   }
 
   let page = startPage;
   const perPage = 100;
 
   while (true) {
-    let rawJson;
+    let stdout;
     try {
-      rawJson = execSync(
+      const result = await execAsync(
         `gh api "repos/${repo}/stargazers?per_page=${perPage}&page=${page}" -H "Accept: application/vnd.github.v3.star+json"`,
-        { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'] }
+        { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 }
       );
+      stdout = result.stdout;
     } catch (err) {
       const stderr = err.stderr ? err.stderr.toString() : '';
       if (dateSet.size > 0) {
@@ -175,9 +179,9 @@ function fetchRepoStars(repo) {
 
     let entries;
     try {
-      entries = JSON.parse(rawJson);
+      entries = JSON.parse(stdout);
     } catch {
-      console.error(`Error: Failed to parse API response on page ${page}.`);
+      console.error(`[${repo}] Failed to parse API response on page ${page}.`);
       break;
     }
 
@@ -196,14 +200,12 @@ function fetchRepoStars(repo) {
     const isLastPage = entries.length < perPage;
 
     const progress = isLastPage ? (starCount || dateSet.size) : page * perPage;
-    process.stdout.write(`\r  Page ${page} - ${progress.toLocaleString()} stars`);
+    console.log(`[${repo}] Page ${page} - ${progress.toLocaleString()} stars`);
 
     if (isLastPage) break;
 
     page++;
   }
-
-  process.stdout.write('\n');
 
   const dates = [...dateSet].sort();
   const displayCount = starCount || dates.length;
@@ -231,34 +233,49 @@ function fetchRepoStars(repo) {
 }
 
 // Fetch all repos
-const repoData = [];
+async function main() {
+  const repoData = [];
 
-for (const repo of repoList) {
-  try {
-    const data = fetchRepoStars(repo);
-    if (data.dates.length === 0) {
-      console.error(`Warning: No stars found for "${repo}". Skipping.`);
-      continue;
+  if (multiMode) {
+    // Fetch in parallel
+    const results = await Promise.allSettled(
+      repoList.map(repo => fetchRepoStars(repo))
+    );
+    for (let i = 0; i < repoList.length; i++) {
+      const result = results[i];
+      if (result.status === 'fulfilled') {
+        if (result.value.dates.length === 0) {
+          console.error(`Warning: No stars found for "${repoList[i]}". Skipping.`);
+          continue;
+        }
+        repoData.push({ repo: repoList[i], ...result.value });
+        console.log(`[${repoList[i]}] ${result.value.displayCount.toLocaleString()} stars.`);
+      } else {
+        console.error(`Warning: ${result.reason.message} Skipping.`);
+      }
     }
-    repoData.push({ repo, ...data });
-    console.log(`[${repo}] ${data.displayCount.toLocaleString()} stars.`);
-  } catch (err) {
-    if (multiMode) {
-      console.error(`Warning: ${err.message} Skipping.`);
-      continue;
-    } else {
+  } else {
+    // Single repo
+    try {
+      const data = await fetchRepoStars(repoList[0]);
+      if (data.dates.length === 0) {
+        console.error(`Error: No stars found for "${repoList[0]}".`);
+        process.exit(1);
+      }
+      repoData.push({ repo: repoList[0], ...data });
+      console.log(`[${repoList[0]}] ${data.displayCount.toLocaleString()} stars.`);
+    } catch (err) {
       console.error(`Error: ${err.message}`);
       process.exit(1);
     }
   }
-}
 
-if (repoData.length === 0) {
-  console.error('Error: No star data retrieved for any repo.');
-  process.exit(1);
-}
+  if (repoData.length === 0) {
+    console.error('Error: No star data retrieved for any repo.');
+    process.exit(1);
+  }
 
-console.log('Generating chart...');
+  console.log('Generating chart...');
 
 // --- Style definitions ---
 
@@ -523,16 +540,19 @@ console.log(`Saved to ${outputPath}`);
 // --- Open in browser ---
 
 if (!flags.noOpen) {
-  const platform = os.platform();
-  try {
-    if (platform === 'darwin') {
-      execSync(`open "${outputPath}"`);
-    } else if (platform === 'win32') {
-      execSync(`start "" "${outputPath}"`);
-    } else {
-      execSync(`xdg-open "${outputPath}" 2>/dev/null || sensible-browser "${outputPath}" 2>/dev/null || true`);
+    const platform = os.platform();
+    try {
+      if (platform === 'darwin') {
+        execSync(`open "${outputPath}"`);
+      } else if (platform === 'win32') {
+        execSync(`start "" "${outputPath}"`);
+      } else {
+        execSync(`xdg-open "${outputPath}" 2>/dev/null || sensible-browser "${outputPath}" 2>/dev/null || true`);
+      }
+    } catch {
+      // Silently ignore if browser can't be opened
     }
-  } catch {
-    // Silently ignore if browser can't be opened
   }
 }
+
+main();
