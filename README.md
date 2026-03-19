@@ -13,7 +13,7 @@ npx gh-star-history ykdojo/claude-code-tips
 Or compare multiple repos:
 
 ```
-npx gh-star-history facebook/react vuejs/vue sveltejs/svelte
+npx gh-star-history vuejs/vue withastro/astro sveltejs/svelte
 ```
 
 Generates a self-contained HTML file with an interactive Plotly chart - hover for details, zoom into spikes, pan across time.
@@ -33,7 +33,7 @@ Accepts both formats, and multiple repos:
 ```bash
 npx gh-star-history ykdojo/claude-code-tips
 npx gh-star-history https://github.com/ykdojo/claude-code-tips
-npx gh-star-history facebook/react vuejs/vue sveltejs/svelte
+npx gh-star-history vuejs/vue withastro/astro sveltejs/svelte
 ```
 
 ### Options
@@ -59,7 +59,7 @@ npx gh-star-history ykdojo/claude-code-tips --style green
 npx gh-star-history torvalds/linux --output linux-stars.html
 
 # Compare multiple repos
-npx gh-star-history facebook/react vuejs/vue sveltejs/svelte
+npx gh-star-history vuejs/vue withastro/astro sveltejs/svelte
 ```
 
 ## Styles
@@ -72,12 +72,12 @@ Three styles matching GitHub's dark theme palette:
 
 ## How it works
 
-1. Fetches stargazer timestamps via `gh api`, page by page
-2. Caches results to `~/.gh-star-history-cache.json` - subsequent runs only fetch new stars
+1. Fetches stargazer timestamps via GitHub's GraphQL API (no pagination limit)
+2. Caches results to `~/.gh-star-history/` (one file per repo) - subsequent runs only fetch new stars
 3. Generates a self-contained HTML file with [Plotly.js](https://plotly.com/javascript/) loaded from CDN
 4. Opens it in your default browser
 
-The cache saves after every page, so even if a large fetch gets interrupted, progress is kept. Single-repo charts show both cumulative stars (line) and stars per day (bars) on a dual-axis layout. Multi-repo charts show cumulative lines with a legend for comparison.
+The cache saves after every batch, so even if a large fetch gets interrupted, progress is kept. Single-repo charts show both cumulative stars (line) and stars per day (bars) on a dual-axis layout. Multi-repo charts show cumulative lines with a legend for comparison.
 
 ## Development
 
