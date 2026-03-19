@@ -159,11 +159,11 @@ async function fetchRepoStars(repo, onProgress) {
   // Load cache - support old formats
   const cachedEntry = cache[repo] || {};
   const cachedDates = Array.isArray(cachedEntry) ? cachedEntry : (cachedEntry.dates || []);
-  const dateSet = new Set(cachedDates);
+  const dates = [...cachedDates];
   let cursor = cachedEntry.cursor || null;
   let starCount = cachedEntry.starCount || null;
 
-  onProgress({ fetched: dateSet.size, total: starCount, cached: dateSet.size > 0 });
+  onProgress({ fetched: dates.length, total: starCount, cached: dates.length > 0 });
 
   let batch = 0;
 
@@ -180,8 +180,8 @@ async function fetchRepoStars(repo, onProgress) {
       stdout = result.stdout;
     } catch (err) {
       const stderr = err.stderr ? err.stderr.toString() : '';
-      if (dateSet.size > 0) {
-        cache[repo] = { dates: [...dateSet].sort(), starCount: starCount || dateSet.size, cursor };
+      if (dates.length > 0) {
+        cache[repo] = { dates: dates.sort(), starCount: starCount || dates.length, cursor };
         saveCache(cache);
       }
       if (stderr.includes('Could not resolve')) {
@@ -216,22 +216,22 @@ async function fetchRepoStars(repo, onProgress) {
     if (edges.length === 0) break;
 
     for (const edge of edges) {
-      if (edge.starredAt) dateSet.add(edge.starredAt);
+      if (edge.starredAt) dates.push(edge.starredAt);
     }
 
     cursor = pageInfo.endCursor;
     batch++;
 
     // Save cache after every batch
-    cache[repo] = { dates: [...dateSet].sort(), starCount, cursor };
+    cache[repo] = { dates: dates.sort(), starCount, cursor };
     saveCache(cache);
 
-    onProgress({ fetched: dateSet.size, total: starCount });
+    onProgress({ fetched: dates.length, total: starCount });
 
     if (!pageInfo.hasNextPage) break;
   }
 
-  const dates = [...dateSet].sort();
+  dates.sort();
   const displayCount = starCount || dates.length;
   const cumulative = dates.map((_, i) => i + 1);
 
