@@ -36,10 +36,10 @@ if (flags.help || positional.length === 0) {
   gh-star-history - Visualize GitHub star history
 
   Usage:
-    npx gh-star-history <owner/repo or URL> [options]
+    npx gh-star-history <owner/repo or URL> ... [options]
 
   Options:
-    --style <name>   Chart style: blue (default), green, purple
+    --style <name>   Chart style: blue (default), green, purple (single repo only)
     --output <path>  Output file path (default: star-history.html)
     --no-open        Don't auto-open the browser
     --no-cache       Skip cache and fetch fresh data
@@ -49,31 +49,43 @@ if (flags.help || positional.length === 0) {
     npx gh-star-history ykdojo/claude-code-tips
     npx gh-star-history https://github.com/ykdojo/claude-code-tips
     npx gh-star-history ykdojo/claude-code-tips --style green
+    npx gh-star-history facebook/react vuejs/vue sveltejs/svelte
 
   Requires: GitHub CLI (gh) must be installed and authenticated.
 `);
   process.exit(flags.help ? 0 : 1);
 }
 
-// Parse repo - accept both "owner/repo" and full GitHub URLs
-let repo = positional[0];
-const ghUrl = repo.match(/^https?:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?(?:\/.*)?$/);
-if (ghUrl) {
-  repo = ghUrl[1];
+// Parse repos - accept both "owner/repo" and full GitHub URLs
+const repos = positional.map(arg => {
+  const ghUrl = arg.match(/^https?:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?(?:\/.*)?$/);
+  const normalized = ghUrl ? ghUrl[1] : arg;
+  if (!/^[^/]+\/[^/]+$/.test(normalized)) {
+    console.error(`Error: Invalid repo format "${arg}". Use owner/repo or a GitHub URL.`);
+    process.exit(1);
+  }
+  return normalized;
+});
+
+// Deduplicate
+const repoList = [...new Set(repos)];
+if (repoList.length !== repos.length) {
+  console.log('Note: Duplicate repos removed.');
 }
+
+if (repoList.length > 10) {
+  console.error('Error: Maximum 10 repos supported for comparison.');
+  process.exit(1);
+}
+
+const multiMode = repoList.length > 1;
 
 const style = flags.style || 'blue';
 const outputPath = flags.output || 'star-history.html';
 
 const validStyles = ['blue', 'green', 'purple'];
-if (!validStyles.includes(style)) {
+if (!multiMode && !validStyles.includes(style)) {
   console.error(`Error: Unknown style "${style}". Choose from: ${validStyles.join(', ')}`);
-  process.exit(1);
-}
-
-// Validate repo format
-if (!/^[^/]+\/[^/]+$/.test(repo)) {
-  console.error(`Error: Invalid repo format "${repo}". Use owner/repo or a GitHub URL.`);
   process.exit(1);
 }
 
@@ -107,126 +119,146 @@ function saveCache(cache) {
 
 const cache = flags.noCache ? {} : loadCache();
 
-// Support both old format (array) and new format ({ dates, starCount })
-const cachedEntry = cache[repo] || {};
-const cachedDates = Array.isArray(cachedEntry) ? cachedEntry : (cachedEntry.dates || []);
-const cachedStarCount = Array.isArray(cachedEntry) ? null : (cachedEntry.starCount || null);
-const dateSet = new Set(cachedDates);
+function fetchRepoStars(repo) {
+  // Support both old format (array) and new format ({ dates, starCount })
+  const cachedEntry = cache[repo] || {};
+  const cachedDates = Array.isArray(cachedEntry) ? cachedEntry : (cachedEntry.dates || []);
+  const cachedStarCount = Array.isArray(cachedEntry) ? null : (cachedEntry.starCount || null);
+  const dateSet = new Set(cachedDates);
 
-// Resume from the page containing the last cached star.
-// Uses real API dates length for page math (not starCount).
-const startPage = cachedDates.length > 0 ? Math.floor((cachedDates.length - 1) / 100) + 1 : 1;
+  const startPage = cachedDates.length > 0 ? Math.floor((cachedDates.length - 1) / 100) + 1 : 1;
 
-// Fetch the official star count so we can detect gaps
-let starCount;
-try {
-  const repoJson = execSync(
-    `gh api "repos/${repo}" --jq '.stargazers_count'`,
-    { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
-  );
-  starCount = parseInt(repoJson.trim(), 10);
-  if (isNaN(starCount)) starCount = null;
-} catch {
-  starCount = null;
-}
-
-if (cachedDates.length > 0 && startPage > 1) {
-  const displayCached = cachedStarCount || starCount || cachedDates.length;
-  console.log(`Found ${displayCached.toLocaleString()} cached stars. Fetching new stars from page ${startPage}...`);
-} else {
-  console.log(`Fetching star history for ${repo}...`);
-}
-
-let page = startPage;
-const perPage = 100;
-
-while (true) {
-  let rawJson;
+  // Fetch the official star count so we can detect gaps
+  let starCount;
   try {
-    rawJson = execSync(
-      `gh api "repos/${repo}/stargazers?per_page=${perPage}&page=${page}" -H "Accept: application/vnd.github.v3.star+json"`,
-      { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'] }
+    const repoJson = execSync(
+      `gh api "repos/${repo}" --jq '.stargazers_count'`,
+      { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
     );
-  } catch (err) {
-    const stderr = err.stderr ? err.stderr.toString() : '';
-    if (stderr.includes('404')) {
-      console.error(`Error: Repository "${repo}" not found.`);
-    } else if (stderr.includes('401') || stderr.includes('403')) {
-      console.error('Error: Authentication failed. Run "gh auth login" first.');
-    } else {
-      console.error(`Error fetching page ${page}: ${stderr || err.message}`);
-    }
-    if (dateSet.size > 0) {
-      console.log(`Saving ${dateSet.size.toLocaleString()} stars fetched so far to cache.`);
-      cache[repo] = { dates: [...dateSet].sort(), starCount: starCount || dateSet.size };
-      saveCache(cache);
-    }
-    process.exit(1);
-  }
-
-  let entries;
-  try {
-    entries = JSON.parse(rawJson);
+    starCount = parseInt(repoJson.trim(), 10);
+    if (isNaN(starCount)) starCount = null;
   } catch {
-    console.error(`Error: Failed to parse API response on page ${page}.`);
-    break;
+    starCount = null;
   }
 
-  if (!Array.isArray(entries) || entries.length === 0) break;
-
-  const pageDates = entries.map(e => e.starred_at).filter(Boolean);
-
-  for (const d of pageDates) {
-    dateSet.add(d);
+  if (cachedDates.length > 0 && startPage > 1) {
+    const displayCached = cachedStarCount || starCount || cachedDates.length;
+    console.log(`[${repo}] Found ${displayCached.toLocaleString()} cached stars. Fetching new stars from page ${startPage}...`);
+  } else {
+    console.log(`Fetching star history for ${repo}...`);
   }
 
-  // Save cache after every page
-  cache[repo] = { dates: [...dateSet].sort(), starCount: starCount || dateSet.size };
-  saveCache(cache);
+  let page = startPage;
+  const perPage = 100;
 
-  const isLastPage = entries.length < perPage;
+  while (true) {
+    let rawJson;
+    try {
+      rawJson = execSync(
+        `gh api "repos/${repo}/stargazers?per_page=${perPage}&page=${page}" -H "Accept: application/vnd.github.v3.star+json"`,
+        { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'] }
+      );
+    } catch (err) {
+      const stderr = err.stderr ? err.stderr.toString() : '';
+      if (dateSet.size > 0) {
+        cache[repo] = { dates: [...dateSet].sort(), starCount: starCount || dateSet.size };
+        saveCache(cache);
+      }
+      if (stderr.includes('404')) {
+        throw new Error(`Repository "${repo}" not found.`);
+      } else if (stderr.includes('401') || stderr.includes('403')) {
+        throw new Error('Authentication failed. Run "gh auth login" first.');
+      } else {
+        throw new Error(`Error fetching page ${page}: ${stderr || err.message}`);
+      }
+    }
 
-  // Progress: assume 100 per full page, use starCount for the last page
-  const progress = isLastPage ? (starCount || dateSet.size) : page * perPage;
-  process.stdout.write(`\r  Page ${page} - ${progress.toLocaleString()} stars`);
+    let entries;
+    try {
+      entries = JSON.parse(rawJson);
+    } catch {
+      console.error(`Error: Failed to parse API response on page ${page}.`);
+      break;
+    }
 
-  if (isLastPage) break;
+    if (!Array.isArray(entries) || entries.length === 0) break;
 
-  page++;
+    const pageDates = entries.map(e => e.starred_at).filter(Boolean);
+
+    for (const d of pageDates) {
+      dateSet.add(d);
+    }
+
+    // Save cache after every page
+    cache[repo] = { dates: [...dateSet].sort(), starCount: starCount || dateSet.size };
+    saveCache(cache);
+
+    const isLastPage = entries.length < perPage;
+
+    const progress = isLastPage ? (starCount || dateSet.size) : page * perPage;
+    process.stdout.write(`\r  Page ${page} - ${progress.toLocaleString()} stars`);
+
+    if (isLastPage) break;
+
+    page++;
+  }
+
+  process.stdout.write('\n');
+
+  const dates = [...dateSet].sort();
+  const displayCount = starCount || dates.length;
+  const cumulative = dates.map((_, i) => i + 1);
+
+  // Aggregate daily
+  const dailyCounts = {};
+  for (const d of dates) {
+    const day = d.slice(0, 10);
+    dailyCounts[day] = (dailyCounts[day] || 0) + 1;
+  }
+  const dailyDates = Object.keys(dailyCounts).sort();
+  const dailyValues = dailyDates.map(d => dailyCounts[d]);
+
+  // Aggregate hourly
+  const hourlyCounts = {};
+  for (const d of dates) {
+    const hour = d.slice(0, 13);
+    hourlyCounts[hour] = (hourlyCounts[hour] || 0) + 1;
+  }
+  const hourlyDates = Object.keys(hourlyCounts).sort().map(h => h + ':00:00Z');
+  const hourlyValues = Object.keys(hourlyCounts).sort().map(h => hourlyCounts[h]);
+
+  return { dates, cumulative, dailyDates, dailyValues, hourlyDates, hourlyValues, displayCount };
 }
 
-process.stdout.write('\n');
+// Fetch all repos
+const repoData = [];
 
-const dates = [...dateSet].sort();
+for (const repo of repoList) {
+  try {
+    const data = fetchRepoStars(repo);
+    if (data.dates.length === 0) {
+      console.error(`Warning: No stars found for "${repo}". Skipping.`);
+      continue;
+    }
+    repoData.push({ repo, ...data });
+    console.log(`[${repo}] ${data.displayCount.toLocaleString()} stars.`);
+  } catch (err) {
+    if (multiMode) {
+      console.error(`Warning: ${err.message} Skipping.`);
+      continue;
+    } else {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  }
+}
 
-if (dates.length === 0) {
-  console.error(`Error: No stars found for "${repo}".`);
+if (repoData.length === 0) {
+  console.error('Error: No star data retrieved for any repo.');
   process.exit(1);
 }
 
-const displayCount = starCount || dates.length;
-
-const cumulative = dates.map((_, i) => i + 1);
-
-// Aggregate daily
-const dailyCounts = {};
-for (const d of dates) {
-  const day = d.slice(0, 10);
-  dailyCounts[day] = (dailyCounts[day] || 0) + 1;
-}
-const dailyDates = Object.keys(dailyCounts).sort();
-const dailyValues = dailyDates.map(d => dailyCounts[d]);
-
-// Aggregate hourly
-const hourlyCounts = {};
-for (const d of dates) {
-  const hour = d.slice(0, 13); // "2025-12-05T14"
-  hourlyCounts[hour] = (hourlyCounts[hour] || 0) + 1;
-}
-const hourlyDates = Object.keys(hourlyCounts).sort().map(h => h + ':00:00Z');
-const hourlyValues = Object.keys(hourlyCounts).sort().map(h => hourlyCounts[h]);
-
-console.log(`Total: ${displayCount.toLocaleString()} stars. Generating chart...`);
+console.log('Generating chart...');
 
 // --- Style definitions ---
 
@@ -248,15 +280,49 @@ const styles = {
   },
 };
 
-const s = styles[style];
+const multiColors = [
+  '#58a6ff', '#3fb950', '#bc8cff', '#f78166', '#e3b341',
+  '#f97583', '#56d4dd', '#db61a2', '#7ee787', '#79c0ff',
+];
 
 // --- Generate HTML ---
+
+const s = multiMode ? null : styles[style];
+const d0 = repoData[0]; // first repo (used for single-mode)
+
+const chartTitle = multiMode
+  ? 'Star history comparison'
+  : `<a href="https://github.com/${d0.repo}" target="_blank">${d0.repo}</a>`;
+
+const chartSubtitle = multiMode
+  ? repoData.map(d => `<a href="https://github.com/${d.repo}" target="_blank" style="color:#8b949e">${d.repo}</a>`).join(' vs ')
+  : `${d0.displayCount.toLocaleString()} stars`;
+
+const granularityToggle = multiMode ? '' : `
+    <span style="margin-left: 12px; border-left: 1px solid #30363d; padding-left: 16px;">
+      <button class="range-btn active" data-granularity="daily">Daily</button>
+      <button class="range-btn" data-granularity="hourly">Hourly</button>
+    </span>`;
+
+// Build client-side data
+const clientRepoData = JSON.stringify(repoData.map((d, i) => ({
+  repo: d.repo,
+  dates: d.dates,
+  cumulative: d.cumulative,
+  dailyDates: d.dailyDates,
+  dailyValues: d.dailyValues,
+  hourlyDates: d.hourlyDates,
+  hourlyValues: d.hourlyValues,
+  color: multiMode ? multiColors[i % multiColors.length] : s.lineColor,
+  fillColor: multiMode ? 'transparent' : s.fillColor,
+  barColor: multiMode ? null : s.barColor,
+})));
 
 const html = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<title>Star History - ${repo}</title>
+<title>Star History${multiMode ? ' - Comparison' : ` - ${d0.repo}`}</title>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"><\/script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -266,6 +332,8 @@ const html = `<!DOCTYPE html>
   h1 a { color: #e6edf3; text-decoration: none; }
   h1 a:hover { text-decoration: underline; }
   .subtitle { text-align: center; color: #8b949e; font-size: 14px; margin-bottom: 20px; }
+  .subtitle a { color: #8b949e; text-decoration: none; }
+  .subtitle a:hover { text-decoration: underline; }
   #chart { width: 100%; }
   .range-buttons { text-align: center; margin-bottom: 12px; }
   .range-btn {
@@ -281,60 +349,53 @@ const html = `<!DOCTYPE html>
 </head>
 <body>
 <div class="container">
-  <h1><a href="https://github.com/${repo}" target="_blank">${repo}</a></h1>
-  <div class="subtitle">${displayCount.toLocaleString()} stars</div>
+  <h1>${chartTitle}</h1>
+  <div class="subtitle">${chartSubtitle}</div>
   <div class="range-buttons">
     <button class="range-btn active" data-range="all">All Time</button>
     <button class="range-btn" data-range="month">Past Month</button>
     <button class="range-btn" data-range="week">Past Week</button>
-    <button class="range-btn" data-range="day">Past 24h</button>
-    <span style="margin-left: 12px; border-left: 1px solid #30363d; padding-left: 16px;">
-      <button class="range-btn active" data-granularity="daily">Daily</button>
-      <button class="range-btn" data-granularity="hourly">Hourly</button>
-    </span>
+    <button class="range-btn" data-range="day">Past 24h</button>${granularityToggle}
   </div>
   <div id="chart"></div>
   <div class="footer">Generated by <a href="https://github.com/ykdojo/gh-star-history" target="_blank">ykdojo/gh-star-history</a></div>
 </div>
 
 <script>
-const dates = ${JSON.stringify(dates)};
-const cumulative = ${JSON.stringify(cumulative)};
-const dailyDates = ${JSON.stringify(dailyDates)};
-const dailyValues = ${JSON.stringify(dailyValues)};
-const hourlyDates = ${JSON.stringify(hourlyDates)};
-const hourlyValues = ${JSON.stringify(hourlyValues)};
+const repoData = ${clientRepoData};
+const multiMode = ${multiMode};
 
 const chartEl = document.getElementById('chart');
-const baseTraces = [
-  {
-    x: dates,
-    y: cumulative,
-    fill: 'tozeroy',
-    fillcolor: '${s.fillColor}',
-    line: { color: '${s.lineColor}', width: 2.5 },
-    name: 'Total Stars',
-    hovertemplate: '%{x|%b %d, %Y %H:%M}<br>%{y:,} stars<extra></extra>'
-  }
-];
-const dailyBar = {
-  x: dailyDates,
-  y: dailyValues,
-  type: 'bar',
-  marker: { color: '${s.barColor}' },
-  name: 'Stars / Day',
-  yaxis: 'y2',
-  hovertemplate: '%{x|%b %d, %Y}<br>%{y} stars that day<extra></extra>'
-};
-const hourlyBar = {
-  x: hourlyDates,
-  y: hourlyValues,
-  type: 'bar',
-  marker: { color: '${s.barColor}' },
-  name: 'Stars / Hour',
-  yaxis: 'y2',
-  hovertemplate: '%{x|%b %d %H:00}<br>%{y} stars that hour<extra></extra>'
-};
+
+// Build traces
+const traces = [];
+repoData.forEach(d => {
+  traces.push({
+    x: d.dates,
+    y: d.cumulative,
+    fill: multiMode ? 'none' : 'tozeroy',
+    fillcolor: d.fillColor,
+    line: { color: d.color, width: 2.5 },
+    name: multiMode ? d.repo : 'Total Stars',
+    hovertemplate: multiMode
+      ? d.repo + '<br>%{x|%b %d, %Y}<br>%{y:,} stars<extra></extra>'
+      : '%{x|%b %d, %Y %H:%M}<br>%{y:,} stars<extra></extra>'
+  });
+});
+
+// Bar traces (single-repo only)
+if (!multiMode) {
+  const d = repoData[0];
+  traces.push({
+    x: d.dailyDates,
+    y: d.dailyValues,
+    type: 'bar',
+    marker: { color: d.barColor },
+    name: 'Stars / Day',
+    yaxis: 'y2',
+    hovertemplate: '%{x|%b %d, %Y}<br>%{y} stars that day<extra></extra>'
+  });
+}
 
 const baseLayout = {
   template: 'plotly_dark',
@@ -349,91 +410,109 @@ const baseLayout = {
     gridcolor: '#21262d',
     color: '#8b949e'
   },
-  yaxis2: {
+  hovermode: 'x unified',
+  showlegend: multiMode,
+  legend: multiMode ? { font: { color: '#c9d1d9' }, bgcolor: 'transparent' } : undefined,
+  margin: { t: 40, r: 60, b: 50, l: 60 },
+  height: 500,
+};
+
+if (!multiMode) {
+  baseLayout.yaxis2 = {
     title: { text: '', font: { color: '#8b949e' } },
     overlaying: 'y',
     side: 'right',
     gridcolor: '#21262d',
     color: '#8b949e'
-  },
-  hovermode: 'x unified',
-  showlegend: false,
-  margin: { t: 40, r: 60, b: 50, l: 60 },
-  height: 500,
-};
+  };
+}
+
 const plotConfig = {
   responsive: true,
   displaylogo: false,
   modeBarButtonsToRemove: ['lasso2d', 'select2d']
 };
 
-const lastDate = new Date(dates[dates.length - 1]).getTime();
+// Compute lastDate across all repos
+const allDates = repoData.flatMap(d => d.dates).sort();
+const lastDateStr = allDates[allDates.length - 1];
+const lastDate = new Date(lastDateStr).getTime();
 const ranges = {
   all: null,
-  month: [new Date(lastDate - 30*24*60*60*1000).toISOString(), dates[dates.length-1]],
-  week: [new Date(lastDate - 7*24*60*60*1000).toISOString(), dates[dates.length-1]],
-  day: [new Date(lastDate - 24*60*60*1000).toISOString(), dates[dates.length-1]],
+  month: [new Date(lastDate - 30*24*60*60*1000).toISOString(), lastDateStr],
+  week: [new Date(lastDate - 7*24*60*60*1000).toISOString(), lastDateStr],
+  day: [new Date(lastDate - 24*60*60*1000).toISOString(), lastDateStr],
 };
 
 // Initial render
-Plotly.newPlot(chartEl, [...baseTraces, dailyBar], baseLayout, plotConfig);
+Plotly.newPlot(chartEl, traces, baseLayout, plotConfig);
 
-// State
+// Granularity (single-repo only)
 let currentBar = 'daily';
 
-function setGranularity(granularity) {
-  if (granularity === currentBar) return;
-  if (granularity === 'hourly') {
-    Plotly.restyle(chartEl, { x: [hourlyDates], y: [hourlyValues], name: 'Stars / Hour', hovertemplate: '%{x|%b %d %H:00}<br>%{y} stars that hour<extra></extra>' }, [1]);
-  } else {
-    Plotly.restyle(chartEl, { x: [dailyDates], y: [dailyValues], name: 'Stars / Day', hovertemplate: '%{x|%b %d, %Y}<br>%{y} stars that day<extra></extra>' }, [1]);
+if (!multiMode) {
+  const d = repoData[0];
+  const barIndex = traces.length - 1;
+
+  function setGranularity(granularity) {
+    if (granularity === currentBar) return;
+    if (granularity === 'hourly') {
+      Plotly.restyle(chartEl, { x: [d.hourlyDates], y: [d.hourlyValues], name: 'Stars / Hour', hovertemplate: '%{x|%b %d %H:00}<br>%{y} stars that hour<extra></extra>' }, [barIndex]);
+    } else {
+      Plotly.restyle(chartEl, { x: [d.dailyDates], y: [d.dailyValues], name: 'Stars / Day', hovertemplate: '%{x|%b %d, %Y}<br>%{y} stars that day<extra></extra>' }, [barIndex]);
+    }
+    currentBar = granularity;
+    document.querySelectorAll('[data-granularity]').forEach(b => b.classList.remove('active'));
+    const activeBtn = document.querySelector('[data-granularity="' + granularity + '"]');
+    if (activeBtn) activeBtn.classList.add('active');
   }
-  currentBar = granularity;
-  // Update granularity button state
-  document.querySelectorAll('[data-granularity]').forEach(b => b.classList.remove('active'));
-  const activeBtn = document.querySelector('[data-granularity="' + granularity + '"]');
-  if (activeBtn) activeBtn.classList.add('active');
+
+  // Granularity toggle handlers
+  document.querySelectorAll('[data-granularity]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setGranularity(btn.dataset.granularity);
+      requestAnimationFrame(() => {
+        const y2Title = currentBar === 'hourly' ? 'Stars / Hour' : 'Stars / Day';
+        Plotly.relayout(chartEl, { 'yaxis2.title.text': y2Title });
+      });
+    });
+  });
+
+  // Range button handlers (with granularity auto-switch)
+  document.querySelectorAll('[data-range]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-range]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const r = btn.dataset.range;
+      const autoGranularity = (r === 'day' || r === 'week') ? 'hourly' : 'daily';
+      setGranularity(autoGranularity);
+      requestAnimationFrame(() => {
+        const y2Title = currentBar === 'hourly' ? 'Stars / Hour' : 'Stars / Day';
+        if (ranges[r]) {
+          Plotly.relayout(chartEl, { 'xaxis.autorange': false, 'xaxis.range': ranges[r], 'yaxis2.title.text': y2Title });
+        } else {
+          Plotly.relayout(chartEl, { 'xaxis.autorange': true, 'yaxis2.title.text': y2Title });
+        }
+      });
+    });
+  });
+} else {
+  // Range button handlers (multi-mode, no granularity)
+  document.querySelectorAll('[data-range]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-range]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const r = btn.dataset.range;
+      requestAnimationFrame(() => {
+        if (ranges[r]) {
+          Plotly.relayout(chartEl, { 'xaxis.autorange': false, 'xaxis.range': ranges[r] });
+        } else {
+          Plotly.relayout(chartEl, { 'xaxis.autorange': true });
+        }
+      });
+    });
+  });
 }
-
-// Range button handlers
-document.querySelectorAll('[data-range]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('[data-range]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    const r = btn.dataset.range;
-
-    // Auto-select granularity based on range
-    const autoGranularity = (r === 'day' || r === 'week') ? 'hourly' : 'daily';
-    setGranularity(autoGranularity);
-
-    requestAnimationFrame(() => {
-      const y2Title = currentBar === 'hourly' ? 'Stars / Hour' : 'Stars / Day';
-      if (ranges[r]) {
-        Plotly.relayout(chartEl, {
-          'xaxis.autorange': false,
-          'xaxis.range': ranges[r],
-          'yaxis2.title.text': y2Title
-        });
-      } else {
-        Plotly.relayout(chartEl, {
-          'xaxis.autorange': true,
-          'yaxis2.title.text': y2Title
-        });
-      }
-    });
-  });
-});
-
-// Granularity toggle handlers
-document.querySelectorAll('[data-granularity]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    setGranularity(btn.dataset.granularity);
-    requestAnimationFrame(() => {
-      const y2Title = currentBar === 'hourly' ? 'Stars / Hour' : 'Stars / Day';
-      Plotly.relayout(chartEl, { 'yaxis2.title.text': y2Title });
-    });
-  });
-});
 <\/script>
 </body>
 </html>`;
