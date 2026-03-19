@@ -233,7 +233,11 @@ async function fetchRepoStars(repo, onProgress) {
 
   dates.sort();
   const displayCount = starCount || dates.length;
-  const cumulative = dates.map((_, i) => i + 1);
+
+  // Extend to present so the chart line doesn't stop at the last star
+  const now = new Date().toISOString();
+  dates.push(now);
+  const cumulative = dates.map((_, i) => Math.min(i + 1, displayCount));
 
   // Aggregate daily
   const dailyCounts = {};
