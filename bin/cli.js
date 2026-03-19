@@ -535,10 +535,20 @@ const plotConfig = {
   modeBarButtonsToRemove: ['lasso2d', 'select2d']
 };
 
-// Compute lastDate across all repos
+// Compute date range across all repos
 const allDates = repoData.flatMap(d => d.dates).sort();
+const firstDateStr = allDates[0];
 const lastDateStr = allDates[allDates.length - 1];
+const firstDate = new Date(firstDateStr).getTime();
 const lastDate = new Date(lastDateStr).getTime();
+const totalSpanMs = lastDate - firstDate;
+
+// Hide "Past Year" button if data range is less than a year
+if (totalSpanMs < 365 * 24 * 60 * 60 * 1000) {
+  const yearBtn = document.querySelector('[data-range="year"]');
+  if (yearBtn) yearBtn.style.display = 'none';
+}
+
 const ranges = {
   all: null,
   year: [utcToLocal(new Date(lastDate - 365*24*60*60*1000).toISOString()), lastDateStr],
