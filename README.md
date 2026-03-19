@@ -6,6 +6,8 @@ Visualize any GitHub repo's star history as an interactive chart. Compare multip
 npx gh-star-history ykdojo/claude-code-tips
 ```
 
+![demo](demo.png)
+
 Or compare multiple repos:
 
 ```
