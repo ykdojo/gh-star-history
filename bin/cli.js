@@ -144,7 +144,7 @@ function renderProgress() {
     let status;
     if (!p) status = 'waiting...';
     else if (p.done) status = `${shortNum(p.total)} done`;
-    else if (p.error) status = 'error';
+    else if (p.error) status = `error: ${p.error}`;
     else status = `${shortNum(p.fetched)} / ${shortNum(p.total || '?')}${p.cached ? ' (cached)' : ''}`;
     process.stdout.write(`\r  ${repo}: ${status}\x1b[K\n`);
   }
@@ -273,7 +273,7 @@ async function main() {
           renderProgress();
           return data;
         }).catch(err => {
-          progress[repo] = { error: true };
+          progress[repo] = { error: err.message };
           renderProgress();
           throw err;
         });
