@@ -433,6 +433,40 @@ const html = `<!DOCTYPE html>
 const repoData = ${clientRepoData};
 const multiMode = ${multiMode};
 
+// Convert UTC dates to local timezone for display
+function utcToLocal(isoStr) {
+  const d = new Date(isoStr);
+  return d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0') + 'T' +
+    String(d.getHours()).padStart(2, '0') + ':' +
+    String(d.getMinutes()).padStart(2, '0') + ':' +
+    String(d.getSeconds()).padStart(2, '0');
+}
+repoData.forEach(d => {
+  d.dates = d.dates.map(utcToLocal);
+  // Re-aggregate daily/hourly in local timezone
+  if (d.dailyDates) {
+    const dailyCounts = {};
+    d.dates.forEach(t => {
+      const day = t.slice(0, 10);
+      dailyCounts[day] = (dailyCounts[day] || 0) + 1;
+    });
+    d.dailyDates = Object.keys(dailyCounts).sort();
+    d.dailyValues = d.dailyDates.map(k => dailyCounts[k]);
+  }
+  if (d.hourlyDates) {
+    const hourlyCounts = {};
+    d.dates.forEach(t => {
+      const hour = t.slice(0, 13);
+      hourlyCounts[hour] = (hourlyCounts[hour] || 0) + 1;
+    });
+    const sortedHours = Object.keys(hourlyCounts).sort();
+    d.hourlyDates = sortedHours.map(h => h + ':00:00');
+    d.hourlyValues = sortedHours.map(h => hourlyCounts[h]);
+  }
+});
+
 const chartEl = document.getElementById('chart');
 
 // Build traces
@@ -507,10 +541,10 @@ const lastDateStr = allDates[allDates.length - 1];
 const lastDate = new Date(lastDateStr).getTime();
 const ranges = {
   all: null,
-  year: [new Date(lastDate - 365*24*60*60*1000).toISOString(), lastDateStr],
-  month: [new Date(lastDate - 30*24*60*60*1000).toISOString(), lastDateStr],
-  week: [new Date(lastDate - 7*24*60*60*1000).toISOString(), lastDateStr],
-  day: [new Date(lastDate - 24*60*60*1000).toISOString(), lastDateStr],
+  year: [utcToLocal(new Date(lastDate - 365*24*60*60*1000).toISOString()), lastDateStr],
+  month: [utcToLocal(new Date(lastDate - 30*24*60*60*1000).toISOString()), lastDateStr],
+  week: [utcToLocal(new Date(lastDate - 7*24*60*60*1000).toISOString()), lastDateStr],
+  day: [utcToLocal(new Date(lastDate - 24*60*60*1000).toISOString()), lastDateStr],
 };
 
 // Initial render
