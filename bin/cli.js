@@ -43,7 +43,7 @@ if (flags.help || positional.length === 0) {
 
   Options:
     --style <name>   Chart style: blue (default), green, purple (single repo only)
-    --output <path>  Output file path (default: star-history.html)
+    --output <path>  Output file path (default: ~/.gh-star-history/star-history.html)
     --no-open        Don't auto-open the browser
     --no-cache       Skip cache and fetch fresh data
     -h, --help       Show this help
@@ -84,7 +84,8 @@ if (repoList.length > 10) {
 const multiMode = repoList.length > 1;
 
 const style = flags.style || 'blue';
-const outputPath = flags.output || 'star-history.html';
+const defaultFilename = repoList.map(r => r.replace('/', '__')).join('__') + '.html';
+const outputPath = flags.output || path.join(os.homedir(), '.gh-star-history', defaultFilename);
 
 const validStyles = ['blue', 'green', 'purple'];
 if (!multiMode && !validStyles.includes(style)) {
