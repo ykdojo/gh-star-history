@@ -115,7 +115,9 @@ function loadCache() {
 }
 
 function saveCache(cache) {
-  fs.writeFileSync(cacheFile, JSON.stringify(cache));
+  const tmp = cacheFile + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(cache));
+  fs.renameSync(tmp, cacheFile);
 }
 
 // --- Fetch star data (cursor-based GraphQL with caching) ---
@@ -145,7 +147,7 @@ function renderProgress() {
     if (!p) status = 'waiting...';
     else if (p.done) status = `${shortNum(p.total)} done`;
     else if (p.error) status = `error: ${p.error}`;
-    else status = `${shortNum(p.fetched)} / ${shortNum(p.total || '?')}${p.cached ? ' (cached)' : ''}`;
+    else status = `${shortNum(p.fetched)} / ${p.total ? p.total.toLocaleString() : '?'}${p.cached ? ' (cached)' : ''}`;
     process.stdout.write(`\r  ${repo}: ${status}\x1b[K\n`);
   }
   progressRendered = true;
@@ -297,7 +299,7 @@ async function main() {
     try {
       const data = await fetchRepoStars(repo, (p) => {
         const fetched = shortNum(p.fetched);
-        const total = p.total ? shortNum(p.total) : '?';
+        const total = p.total ? p.total.toLocaleString() : '?';
         const cached = p.cached ? ' (cached)' : '';
         process.stdout.write(`\r  ${repo}: ${fetched} / ${total} stars${cached}\x1b[K`);
       });
