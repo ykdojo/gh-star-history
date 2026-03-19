@@ -118,7 +118,7 @@ function saveCache(cache) {
   fs.writeFileSync(cacheFile, JSON.stringify(cache));
 }
 
-// --- Fetch star data (page by page with caching) ---
+// --- Fetch star data (cursor-based GraphQL with caching) ---
 
 const cache = flags.noCache ? {} : loadCache();
 
@@ -154,81 +154,81 @@ function renderProgress() {
 // --- Fetch star data ---
 
 async function fetchRepoStars(repo, onProgress) {
-  // Support both old format (array) and new format ({ dates, starCount })
+  const [owner, name] = repo.split('/');
+
+  // Load cache - support old formats
   const cachedEntry = cache[repo] || {};
   const cachedDates = Array.isArray(cachedEntry) ? cachedEntry : (cachedEntry.dates || []);
-  const cachedStarCount = Array.isArray(cachedEntry) ? null : (cachedEntry.starCount || null);
   const dateSet = new Set(cachedDates);
-
-  const startPage = cachedDates.length > 0 ? Math.floor((cachedDates.length - 1) / 100) + 1 : 1;
-
-  // Fetch the official star count so we can detect gaps
-  let starCount;
-  try {
-    const { stdout } = await execAsync(
-      `gh api "repos/${repo}" --jq '.stargazers_count'`,
-      { encoding: 'utf8' }
-    );
-    starCount = parseInt(stdout.trim(), 10);
-    if (isNaN(starCount)) starCount = null;
-  } catch {
-    starCount = null;
-  }
+  let cursor = cachedEntry.cursor || null;
+  let starCount = cachedEntry.starCount || null;
 
   onProgress({ fetched: dateSet.size, total: starCount, cached: dateSet.size > 0 });
 
-  let page = startPage;
-  const perPage = 100;
+  let batch = 0;
 
   while (true) {
+    const afterArg = cursor ? `, after: "${cursor}"` : '';
+    const query = `{ repository(owner: "${owner}", name: "${name}") { stargazers(first: 100${afterArg}) { totalCount pageInfo { hasNextPage endCursor } edges { starredAt } } } }`;
+
     let stdout;
     try {
       const result = await execAsync(
-        `gh api "repos/${repo}/stargazers?per_page=${perPage}&page=${page}" -H "Accept: application/vnd.github.v3.star+json"`,
+        `gh api graphql -f query='${query}'`,
         { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 }
       );
       stdout = result.stdout;
     } catch (err) {
       const stderr = err.stderr ? err.stderr.toString() : '';
       if (dateSet.size > 0) {
-        cache[repo] = { dates: [...dateSet].sort(), starCount: starCount || dateSet.size };
+        cache[repo] = { dates: [...dateSet].sort(), starCount: starCount || dateSet.size, cursor };
         saveCache(cache);
       }
-      if (stderr.includes('404')) {
+      if (stderr.includes('Could not resolve')) {
         throw new Error(`Repository "${repo}" not found.`);
       } else if (stderr.includes('401') || stderr.includes('403')) {
         throw new Error('Authentication failed. Run "gh auth login" first.');
       } else {
-        throw new Error(`Error fetching page ${page}: ${stderr || err.message}`);
+        throw new Error(`Fetch error: ${stderr || err.message}`);
       }
     }
 
-    let entries;
+    let data;
     try {
-      entries = JSON.parse(stdout);
+      data = JSON.parse(stdout);
     } catch {
-      throw new Error(`[${repo}] Failed to parse API response on page ${page}.`);
+      throw new Error(`Failed to parse API response for "${repo}".`);
     }
 
-    if (!Array.isArray(entries) || entries.length === 0) break;
-
-    const pageDates = entries.map(e => e.starred_at).filter(Boolean);
-
-    for (const d of pageDates) {
-      dateSet.add(d);
+    const stargazers = data.data && data.data.repository && data.data.repository.stargazers;
+    if (!stargazers) {
+      const errors = data.errors;
+      if (errors && errors.length > 0) {
+        throw new Error(`GraphQL error for "${repo}": ${errors[0].message}`);
+      }
+      throw new Error(`Unexpected API response for "${repo}".`);
     }
 
-    // Save cache after every page
-    cache[repo] = { dates: [...dateSet].sort(), starCount: starCount || dateSet.size };
+    starCount = stargazers.totalCount;
+    const edges = stargazers.edges || [];
+    const pageInfo = stargazers.pageInfo;
+
+    if (edges.length === 0) break;
+
+    for (const edge of edges) {
+      if (edge.starredAt) dateSet.add(edge.starredAt);
+    }
+
+    cursor = pageInfo.endCursor;
+    batch++;
+
+    // Save cache after every batch
+    cache[repo] = { dates: [...dateSet].sort(), starCount, cursor };
     saveCache(cache);
 
-    const isLastPage = entries.length < perPage;
-    const fetched = isLastPage ? (starCount || dateSet.size) : page * perPage;
-    onProgress({ fetched, total: starCount });
+    onProgress({ fetched: dateSet.size, total: starCount });
 
-    if (isLastPage) break;
-
-    page++;
+    if (!pageInfo.hasNextPage) break;
   }
 
   const dates = [...dateSet].sort();
