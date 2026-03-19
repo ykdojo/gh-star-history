@@ -119,10 +119,12 @@ function loadRepoCache(repo) {
 }
 
 function saveRepoCache(repo, data) {
-  fs.mkdirSync(cacheDir, { recursive: true });
-  const tmp = repoCacheFile(repo) + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(data));
-  fs.renameSync(tmp, repoCacheFile(repo));
+  try {
+    fs.mkdirSync(cacheDir, { recursive: true });
+    fs.writeFileSync(repoCacheFile(repo), JSON.stringify(data));
+  } catch {
+    // Ignore write errors - cache is best-effort
+  }
 }
 
 // --- Progress display ---
