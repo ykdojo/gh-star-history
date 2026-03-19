@@ -52,7 +52,7 @@ if (flags.help || positional.length === 0) {
     npx gh-star-history ykdojo/claude-code-tips
     npx gh-star-history https://github.com/ykdojo/claude-code-tips
     npx gh-star-history ykdojo/claude-code-tips --style green
-    npx gh-star-history facebook/react vuejs/vue sveltejs/svelte
+    npx gh-star-history vuejs/vue withastro/astro sveltejs/svelte
 
   Requires: GitHub CLI (gh) must be installed and authenticated.
 `);
