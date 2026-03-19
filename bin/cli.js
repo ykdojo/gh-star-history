@@ -102,27 +102,28 @@ try {
   process.exit(1);
 }
 
-// --- Cache ---
+// --- Cache (one file per repo) ---
 
-const cacheFile = path.join(os.homedir(), '.gh-star-history-cache.json');
+const cacheDir = path.join(os.homedir(), '.gh-star-history');
 
-function loadCache() {
+function repoCacheFile(repo) {
+  return path.join(cacheDir, repo.replace('/', '__') + '.json');
+}
+
+function loadRepoCache(repo) {
   try {
-    return JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+    return JSON.parse(fs.readFileSync(repoCacheFile(repo), 'utf8'));
   } catch {
-    return {};
+    return null;
   }
 }
 
-function saveCache(cache) {
-  const tmp = cacheFile + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(cache));
-  fs.renameSync(tmp, cacheFile);
+function saveRepoCache(repo, data) {
+  fs.mkdirSync(cacheDir, { recursive: true });
+  const tmp = repoCacheFile(repo) + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(data));
+  fs.renameSync(tmp, repoCacheFile(repo));
 }
-
-// --- Fetch star data (cursor-based GraphQL with caching) ---
-
-const cache = flags.noCache ? {} : loadCache();
 
 // --- Progress display ---
 
@@ -158,12 +159,11 @@ function renderProgress() {
 async function fetchRepoStars(repo, onProgress) {
   const [owner, name] = repo.split('/');
 
-  // Load cache - support old formats
-  const cachedEntry = cache[repo] || {};
-  const cachedDates = Array.isArray(cachedEntry) ? cachedEntry : (cachedEntry.dates || []);
-  const dates = [...cachedDates];
-  let cursor = cachedEntry.cursor || null;
-  let starCount = cachedEntry.starCount || null;
+  // Load cache - cursor is required to resume; without it, start fresh
+  const cachedEntry = flags.noCache ? null : loadRepoCache(repo);
+  let cursor = (cachedEntry && cachedEntry.cursor) || null;
+  const dates = cursor ? [...(cachedEntry.dates || [])] : [];
+  let starCount = (cachedEntry && cachedEntry.starCount) || null;
 
   onProgress({ fetched: dates.length, total: starCount, cached: dates.length > 0 });
 
@@ -183,8 +183,7 @@ async function fetchRepoStars(repo, onProgress) {
     } catch (err) {
       const stderr = err.stderr ? err.stderr.toString() : '';
       if (dates.length > 0) {
-        cache[repo] = { dates: dates.sort(), starCount: starCount || dates.length, cursor };
-        saveCache(cache);
+        saveRepoCache(repo, { dates: dates.sort(), starCount: starCount || dates.length, cursor });
       }
       if (stderr.includes('Could not resolve')) {
         throw new Error(`Repository "${repo}" not found.`);
@@ -225,8 +224,7 @@ async function fetchRepoStars(repo, onProgress) {
     batch++;
 
     // Save cache after every batch
-    cache[repo] = { dates: dates.sort(), starCount, cursor };
-    saveCache(cache);
+    saveRepoCache(repo, { dates: dates.sort(), starCount, cursor });
 
     onProgress({ fetched: dates.length, total: starCount });
 
