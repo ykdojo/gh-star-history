@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// Lists locations from a repo's stargazer cache that aren't in location_map.json
+// Lists locations from a repo's stargazer cache that aren't in location_region_map.json
 // Usage: node bin/list-unclassified.js <owner/repo>
 // Output: CSV to stdout with columns: location, count
 
@@ -16,11 +16,14 @@ if (!repo) {
 
 const cacheFile = path.join(os.homedir(), '.gh-star-history', repo.replace('/', '__') + '__locations.json');
 if (!fs.existsSync(cacheFile)) {
-  console.error(`No cache found for ${repo}. Run "node bin/cli-country.js ${repo}" first.`);
+  console.error(`No cache found for ${repo}. Run "node bin/cli-region.js ${repo}" first.`);
   process.exit(1);
 }
 
-const locationMap = JSON.parse(fs.readFileSync(path.join(__dirname, 'location_map.json'), 'utf8'));
+const locationMapPath = path.join(os.homedir(), '.gh-star-history', 'location_region_map.json');
+const locationMap = fs.existsSync(locationMapPath)
+  ? JSON.parse(fs.readFileSync(locationMapPath, 'utf8'))
+  : {};
 const cache = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
 const locations = cache.locations || [];
 

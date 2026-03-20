@@ -9,7 +9,10 @@ const os = require('os');
 const execAsync = promisify(execCb);
 
 // Location-to-region mapping for region breakdown chart
-const locationMap = JSON.parse(fs.readFileSync(path.join(__dirname, 'location_map.json'), 'utf8'));
+const locationMapPath = path.join(os.homedir(), '.gh-star-history', 'location_region_map.json');
+const locationMap = fs.existsSync(locationMapPath)
+  ? JSON.parse(fs.readFileSync(locationMapPath, 'utf8'))
+  : {};
 
 // --- Argument parsing ---
 
@@ -458,7 +461,7 @@ const multiColors = [
 // --- Generate HTML ---
 
 // Build the command for re-running
-const cmdParts = ['node bin/cli-country.js', ...repoList];
+const cmdParts = ['node bin/cli-region.js', ...repoList];
 if (flags.style && flags.style !== 'blue') cmdParts.push('--style', flags.style);
 if (flags.output) cmdParts.push('--output', flags.output);
 const rerunCommand = cmdParts.join(' ');

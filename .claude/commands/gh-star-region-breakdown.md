@@ -13,7 +13,7 @@ Generate a region breakdown chart for: $ARGUMENTS
 Run the CLI to fetch all stargazers with locations (this caches the data):
 
 ```
-node bin/cli-country.js <owner/repo> --no-open -o /tmp/<repo-name>-region.html
+node bin/cli-region.js <owner/repo> --no-open -o /tmp/<repo-name>-region.html
 ```
 
 This will paginate through all stargazers via the GitHub GraphQL API and cache the results.
@@ -46,12 +46,12 @@ Classification rules:
 
 ### 4. Update location map
 
-Merge the new classified locations into `bin/location_map.json` in the project, adding any new mappings that don't already exist (skip "Unknown" entries).
+Merge the new classified locations into `~/.gh-star-history/location_region_map.json`, adding any new mappings that don't already exist (skip "Unknown" entries).
 
 ### 5. Generate the chart
 
 Run the CLI again to generate the chart with updated mappings:
 
 ```
-node bin/cli-country.js <owner/repo> -o /tmp/<repo-name>-region.html
+node bin/cli-region.js <owner/repo> -o /tmp/<repo-name>-region.html
 ```
