@@ -1,10 +1,10 @@
 ---
-name: country-breakdown
-description: Fetch stargazer locations, classify countries, and generate a country breakdown chart
+name: region-breakdown
+description: Fetch stargazer locations, classify countries, and generate a region breakdown chart
 argument-hint: <owner/repo>
 ---
 
-Generate a country breakdown chart for: $ARGUMENTS
+Generate a region breakdown chart for: $ARGUMENTS
 
 ## Steps
 
@@ -35,11 +35,11 @@ From the stargazers CSV, extract unique location strings with their counts. Save
 Split the locations into batches of ~200 and spawn parallel subagents to classify each batch. Each subagent should:
 
 - Read its batch file (e.g., `/tmp/locations_batch_0.csv`)
-- Determine the country for each location
-- Write output to `/tmp/locations_classified_0.csv` with columns: `location, count, country`
+- Determine the region for each location
+- Write output to `/tmp/locations_classified_0.csv` with columns: `location, count, region`
 
 Classification rules:
-- Use standard country names (e.g., "South Korea", "United States", "China")
+- Use standard region names (e.g., "South Korea", "United States", "China")
 - US cities/states -> "United States"
 - Chinese characters (深圳, 北京, etc.) -> "China"
 - Korean characters (서울, etc.) -> "South Korea"
@@ -49,9 +49,9 @@ Classification rules:
 ### 4. Merge and analyze
 
 After all subagents complete:
-1. Build a location-to-country mapping from all classified files
-2. Read the stargazers CSV and add country column
-3. Show overall country breakdown (top 20 with percentages)
+1. Build a location-to-region mapping from all classified files
+2. Read the stargazers CSV and add region column
+3. Show overall region breakdown (top 20 with percentages)
 4. Show weekly waves (top 5 countries per week) to identify viral spread patterns
 
 ### 5. Update location map
@@ -60,4 +60,4 @@ Merge the new classified locations into `bin/location_map.json` in the project, 
 
 ### 6. Generate the chart
 
-Run `node bin/cli-country.js <owner/repo>` to generate the HTML chart with the country breakdown visualization. This uses the updated location map and fetches fresh data with locations.
+Run `node bin/cli-region.js <owner/repo>` to generate the HTML chart with the region breakdown visualization. This uses the updated location map and fetches fresh data with locations.

@@ -8,7 +8,7 @@ const os = require('os');
 
 const execAsync = promisify(execCb);
 
-// Location-to-country mapping for country breakdown chart
+// Location-to-region mapping for region breakdown chart
 const locationMap = JSON.parse(fs.readFileSync(path.join(__dirname, 'location_map.json'), 'utf8'));
 
 // --- Argument parsing ---
@@ -256,52 +256,52 @@ async function fetchRepoStars(repo, onProgress) {
   }
   const displayCount = starCount || dates.length;
 
-  // Map locations to countries
-  const countryPerStar = locations.map(loc => {
+  // Map locations to regions
+  const regionPerStar = locations.map(loc => {
     if (!loc) return null;
     return locationMap[loc] || null;
   });
 
-  // Aggregate daily country counts (excluding unknown)
-  const dailyCountryMap = {}; // day -> country -> count
+  // Aggregate daily region counts (excluding unknown)
+  const dailyRegionMap = {}; // day -> region -> count
   for (let i = 0; i < dates.length; i++) {
-    const country = countryPerStar[i];
-    if (!country) continue;
+    const region = regionPerStar[i];
+    if (!region) continue;
     const day = dates[i].slice(0, 10);
-    if (!dailyCountryMap[day]) dailyCountryMap[day] = {};
-    dailyCountryMap[day][country] = (dailyCountryMap[day][country] || 0) + 1;
+    if (!dailyRegionMap[day]) dailyRegionMap[day] = {};
+    dailyRegionMap[day][region] = (dailyRegionMap[day][region] || 0) + 1;
   }
 
-  // Find top 6 countries by total
-  const totalByCountry = {};
-  for (const day of Object.keys(dailyCountryMap)) {
-    for (const [country, count] of Object.entries(dailyCountryMap[day])) {
-      totalByCountry[country] = (totalByCountry[country] || 0) + count;
+  // Find top 20 regions by total
+  const totalByRegion = {};
+  for (const day of Object.keys(dailyRegionMap)) {
+    for (const [region, count] of Object.entries(dailyRegionMap[day])) {
+      totalByRegion[region] = (totalByRegion[region] || 0) + count;
     }
   }
-  const topCountries = Object.entries(totalByCountry)
+  const topRegions = Object.entries(totalByRegion)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 20)
     .map(([c]) => c);
 
-  // Build country daily data
-  const countryDailyDates = Object.keys(dailyCountryMap).sort();
-  const countryDailyData = {};
-  for (const country of topCountries) {
-    countryDailyData[country] = countryDailyDates.map(day =>
-      (dailyCountryMap[day] && dailyCountryMap[day][country]) || 0
+  // Build region daily data
+  const regionDailyDates = Object.keys(dailyRegionMap).sort();
+  const regionDailyData = {};
+  for (const region of topRegions) {
+    regionDailyData[region] = regionDailyDates.map(day =>
+      (dailyRegionMap[day] && dailyRegionMap[day][region]) || 0
     );
   }
   // "Other" bucket
-  countryDailyData['Other'] = countryDailyDates.map(day => {
+  regionDailyData['Other'] = regionDailyDates.map(day => {
     let other = 0;
-    for (const [country, count] of Object.entries(dailyCountryMap[day] || {})) {
-      if (!topCountries.includes(country)) other += count;
+    for (const [region, count] of Object.entries(dailyRegionMap[day] || {})) {
+      if (!topRegions.includes(region)) other += count;
     }
     return other;
   });
 
-  const knownCount = Object.values(totalByCountry).reduce((a, b) => a + b, 0);
+  const knownCount = Object.values(totalByRegion).reduce((a, b) => a + b, 0);
 
   // Extend to present so the chart line doesn't stop at the last star
   const now = new Date().toISOString();
@@ -326,7 +326,7 @@ async function fetchRepoStars(repo, onProgress) {
   const hourlyDates = Object.keys(hourlyCounts).sort().map(h => h + ':00:00Z');
   const hourlyValues = Object.keys(hourlyCounts).sort().map(h => hourlyCounts[h]);
 
-  return { dates, cumulative, dailyDates, dailyValues, hourlyDates, hourlyValues, displayCount, countryDailyDates, countryDailyData, topCountries, knownCount };
+  return { dates, cumulative, dailyDates, dailyValues, hourlyDates, hourlyValues, displayCount, regionDailyDates, regionDailyData, topRegions, knownCount };
 }
 
 // Fetch all repos
@@ -453,9 +453,9 @@ const clientRepoData = JSON.stringify(repoData.map((d, i) => ({
   dailyValues: d.dailyValues,
   hourlyDates: d.hourlyDates,
   hourlyValues: d.hourlyValues,
-  countryDailyDates: d.countryDailyDates,
-  countryDailyData: d.countryDailyData,
-  topCountries: d.topCountries,
+  regionDailyDates: d.regionDailyDates,
+  regionDailyData: d.regionDailyData,
+  topRegions: d.topRegions,
   knownCount: d.knownCount,
   color: multiMode ? multiColors[i % multiColors.length] : s.lineColor,
   fillColor: multiMode ? 'transparent' : s.fillColor,
@@ -504,10 +504,10 @@ const html = `<!DOCTYPE html>
     <button class="range-btn" data-range="day">Past 24h</button>${granularityToggle}
   </div>
   <div id="chart"></div>
-  <div id="country-section" style="display:none; margin-top: 32px;">
-    <h2 style="text-align:center; font-size:18px; color:#e6edf3; margin-bottom:4px;">Stars by country</h2>
-    <div id="country-subtitle" style="text-align:center; color:#8b949e; font-size:13px; margin-bottom:12px;"></div>
-    <div id="country-chart"></div>
+  <div id="region-section" style="display:none; margin-top: 32px;">
+    <h2 style="text-align:center; font-size:18px; color:#e6edf3; margin-bottom:4px;">Stars by region</h2>
+    <div id="region-subtitle" style="text-align:center; color:#8b949e; font-size:13px; margin-bottom:12px;"></div>
+    <div id="region-chart"></div>
   </div>
   <div class="footer">Generated by <a href="https://github.com/ykdojo/gh-star-history" target="_blank">ykdojo/gh-star-history</a> | <code>${rerunCommand}</code> <a href="#" onclick="event.preventDefault();navigator.clipboard.writeText('${rerunCommand}').then(()=>{this.textContent='copied!';setTimeout(()=>this.textContent='copy',1500)})" style="color:#58a6ff;text-decoration:none;font-size:11px">copy</a></div>
 </div>
@@ -711,10 +711,10 @@ if (!multiMode) {
         const y2Title = currentBar === 'hourly' ? 'Stars / Hour' : 'Stars / Day';
         if (ranges[currentRange]) {
           Plotly.relayout(chartEl, { 'xaxis.autorange': false, 'xaxis.range': ranges[currentRange], 'yaxis2.title.text': y2Title });
-          if (countryChartEl) Plotly.relayout(countryChartEl, { 'xaxis.autorange': false, 'xaxis.range': ranges[currentRange] });
+          if (regionChartEl) Plotly.relayout(regionChartEl, { 'xaxis.autorange': false, 'xaxis.range': ranges[currentRange] });
         } else {
           Plotly.relayout(chartEl, { 'xaxis.autorange': true, 'yaxis2.title.text': y2Title });
-          if (countryChartEl) Plotly.relayout(countryChartEl, { 'xaxis.autorange': true });
+          if (regionChartEl) Plotly.relayout(regionChartEl, { 'xaxis.autorange': true });
         }
       });
     });
@@ -739,9 +739,9 @@ if (!multiMode) {
     });
   });
 }
-// --- Country breakdown chart (single-repo only) ---
-const countryChartEl = document.getElementById('country-chart');
-const countryColors = [
+// --- Region breakdown chart (single-repo only) ---
+const regionChartEl = document.getElementById('region-chart');
+const regionColors = [
   '#5B8FF9', '#E8684A', '#5AD8A6', '#F6BD16', '#6DC8EC',
   '#9270CA', '#F08BB4', '#7DD1B3', '#E8A65D', '#78D3F8',
   '#D4E157', '#FF8A65', '#4DD0E1', '#BA68C8', '#A1887F',
@@ -749,57 +749,57 @@ const countryColors = [
   '#5D7092'
 ];
 
-if (!multiMode && countryChartEl) {
+if (!multiMode && regionChartEl) {
   const d = repoData[0];
-  if (d.countryDailyDates && d.topCountries && d.topCountries.length > 0) {
-    document.getElementById('country-section').style.display = 'block';
-    document.getElementById('country-subtitle').textContent = d.knownCount + ' of ' + (d.dates.length - 1) + ' stargazers have a public location set';
+  if (d.regionDailyDates && d.topRegions && d.topRegions.length > 0) {
+    document.getElementById('region-section').style.display = 'block';
+    document.getElementById('region-subtitle').textContent = d.knownCount + ' of ' + (d.dates.length - 1) + ' stargazers have a public location set';
 
-    // Re-aggregate country dates in local timezone
-    const countryLocalDaily = {};
-    d.countryDailyDates.forEach((utcDay, idx) => {
+    // Re-aggregate region dates in local timezone
+    const regionLocalDaily = {};
+    d.regionDailyDates.forEach((utcDay, idx) => {
       const localDay = utcToLocal(utcDay + 'T12:00:00Z').slice(0, 10);
-      const allCountries = [...d.topCountries, 'Other'];
-      allCountries.forEach(country => {
-        if (!countryLocalDaily[country]) countryLocalDaily[country] = {};
-        countryLocalDaily[country][localDay] = (countryLocalDaily[country][localDay] || 0) + (d.countryDailyData[country][idx] || 0);
+      const allRegions = [...d.topRegions, 'Other'];
+      allRegions.forEach(region => {
+        if (!regionLocalDaily[region]) regionLocalDaily[region] = {};
+        regionLocalDaily[region][localDay] = (regionLocalDaily[region][localDay] || 0) + (d.regionDailyData[region][idx] || 0);
       });
     });
-    const localDays = [...new Set(d.countryDailyDates.map(utcDay => utcToLocal(utcDay + 'T12:00:00Z').slice(0, 10)))].sort();
+    const localDays = [...new Set(d.regionDailyDates.map(utcDay => utcToLocal(utcDay + 'T12:00:00Z').slice(0, 10)))].sort();
 
-    const countryTraces = [];
+    const regionTraces = [];
     // Build in frequency order so colors are assigned by rank
-    const allCountries = [...d.topCountries, 'Other'];
-    const colorByCountry = {};
-    allCountries.forEach((country, i) => { colorByCountry[country] = countryColors[i % countryColors.length]; });
-    // For each day, find top 5 countries by count
+    const allRegions = [...d.topRegions, 'Other'];
+    const colorByRegion = {};
+    allRegions.forEach((region, i) => { colorByRegion[region] = regionColors[i % regionColors.length]; });
+    // For each day, find top 5 regions by count
     const top5PerDay = {};
     localDays.forEach(day => {
-      const entries = allCountries
-        .map(c => ({ c, v: (countryLocalDaily[c] && countryLocalDaily[c][day]) || 0 }))
+      const entries = allRegions
+        .map(c => ({ c, v: (regionLocalDaily[c] && regionLocalDaily[c][day]) || 0 }))
         .filter(e => e.v > 0)
         .sort((a, b) => b.v - a.v)
         .slice(0, 5);
       top5PerDay[day] = new Set(entries.map(e => e.c));
     });
 
-    // Reverse trace order so most frequent country is on top of stack
-    [...allCountries].reverse().forEach(country => {
-      countryTraces.push({
+    // Reverse trace order so most frequent region is on top of stack
+    [...allRegions].reverse().forEach(region => {
+      regionTraces.push({
         x: localDays,
         y: localDays.map(day => {
-          const v = (countryLocalDaily[country] && countryLocalDaily[country][day]) || 0;
-          if (v === 0 || !top5PerDay[day].has(country)) return null;
+          const v = (regionLocalDaily[region] && regionLocalDaily[region][day]) || 0;
+          if (v === 0 || !top5PerDay[day].has(region)) return null;
           return v;
         }),
         type: 'bar',
-        name: country,
-        marker: { color: colorByCountry[country] },
-        hovertemplate: country + ': %{y}<extra></extra>'
+        name: region,
+        marker: { color: colorByRegion[region] },
+        hovertemplate: region + ': %{y}<extra></extra>'
       });
     });
 
-    const countryLayout = {
+    const regionLayout = {
       template: 'plotly_dark',
       paper_bgcolor: '#0d1117',
       plot_bgcolor: '#0d1117',
@@ -813,7 +813,7 @@ if (!multiMode && countryChartEl) {
       height: 350,
     };
 
-    Plotly.newPlot(countryChartEl, countryTraces, countryLayout, plotConfig);
+    Plotly.newPlot(regionChartEl, regionTraces, regionLayout, plotConfig);
   }
 }
 <\/script>
