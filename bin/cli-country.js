@@ -458,7 +458,7 @@ const multiColors = [
 // --- Generate HTML ---
 
 // Build the command for re-running
-const cmdParts = ['npx gh-star-history', ...repoList];
+const cmdParts = ['node bin/cli-country.js', ...repoList];
 if (flags.style && flags.style !== 'blue') cmdParts.push('--style', flags.style);
 if (flags.output) cmdParts.push('--output', flags.output);
 const rerunCommand = cmdParts.join(' ');
