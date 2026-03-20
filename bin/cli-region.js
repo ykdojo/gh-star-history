@@ -262,7 +262,9 @@ async function fetchRepoStars(repo, onProgress) {
   // Map locations to regions
   const regionPerStar = locations.map(loc => {
     if (!loc) return null;
-    return locationMap[loc] || null;
+    const region = locationMap[loc];
+    if (!region || region === 'Unknown') return null;
+    return region;
   });
 
   // Aggregate daily region counts (excluding unknown)
