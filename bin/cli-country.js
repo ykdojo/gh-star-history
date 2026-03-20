@@ -272,7 +272,7 @@ async function fetchRepoStars(repo, onProgress) {
     dailyRegionMap[day][region] = (dailyRegionMap[day][region] || 0) + 1;
   }
 
-  // Find top 20 regions by total
+  // Find top 34 regions by total
   const totalByRegion = {};
   for (const day of Object.keys(dailyRegionMap)) {
     for (const [region, count] of Object.entries(dailyRegionMap[day])) {
@@ -281,7 +281,7 @@ async function fetchRepoStars(repo, onProgress) {
   }
   const topRegions = Object.entries(totalByRegion)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 20)
+    .slice(0, 34)
     .map(([c]) => c);
 
   // Build region daily data
@@ -746,6 +746,11 @@ const regionColors = [
   '#9270CA', '#F08BB4', '#7DD1B3', '#E8A65D', '#78D3F8',
   '#D4E157', '#FF8A65', '#4DD0E1', '#BA68C8', '#A1887F',
   '#90A4AE', '#F48FB1', '#80CBC4', '#FFD54F', '#CE93D8',
+  '#AED581', '#4FC3F7', '#FF7043', '#7986CB', '#FFF176',
+  '#E57373', '#81C784', '#64B5F6', '#FFB74D', '#9575CD',
+  '#C5E1A5', '#EF9A9A', '#80DEEA', '#B39DDB', '#FFCC80',
+  '#A5D6A7', '#90CAF9', '#FFAB91', '#CE93D8', '#FFF59D',
+  '#F48FB1', '#B0BEC5',
   '#5D7092'
 ];
 
