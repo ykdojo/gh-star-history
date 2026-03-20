@@ -301,6 +301,18 @@ async function fetchRepoStars(repo, onProgress) {
     return other;
   });
 
+  // Individual "Other" regions for hover breakdown
+  const otherRegions = Object.entries(totalByRegion)
+    .filter(([r]) => !topRegions.includes(r))
+    .sort((a, b) => b[1] - a[1])
+    .map(([r]) => r);
+  const otherRegionDailyData = {};
+  for (const region of otherRegions) {
+    otherRegionDailyData[region] = regionDailyDates.map(day =>
+      (dailyRegionMap[day] && dailyRegionMap[day][region]) || 0
+    );
+  }
+
   const knownCount = Object.values(totalByRegion).reduce((a, b) => a + b, 0);
 
   // Extend to present so the chart line doesn't stop at the last star
@@ -326,7 +338,7 @@ async function fetchRepoStars(repo, onProgress) {
   const hourlyDates = Object.keys(hourlyCounts).sort().map(h => h + ':00:00Z');
   const hourlyValues = Object.keys(hourlyCounts).sort().map(h => hourlyCounts[h]);
 
-  return { dates, cumulative, dailyDates, dailyValues, hourlyDates, hourlyValues, displayCount, regionDailyDates, regionDailyData, topRegions, knownCount };
+  return { dates, cumulative, dailyDates, dailyValues, hourlyDates, hourlyValues, displayCount, regionDailyDates, regionDailyData, topRegions, otherRegions, otherRegionDailyData, knownCount };
 }
 
 // Fetch all repos
@@ -456,6 +468,8 @@ const clientRepoData = JSON.stringify(repoData.map((d, i) => ({
   regionDailyDates: d.regionDailyDates,
   regionDailyData: d.regionDailyData,
   topRegions: d.topRegions,
+  otherRegions: d.otherRegions,
+  otherRegionDailyData: d.otherRegionDailyData,
   knownCount: d.knownCount,
   color: multiMode ? multiColors[i % multiColors.length] : s.lineColor,
   fillColor: multiMode ? 'transparent' : s.fillColor,
@@ -774,6 +788,17 @@ if (!multiMode && regionChartEl) {
         regionLocalDaily[region][localDay] = (regionLocalDaily[region][localDay] || 0) + (d.regionDailyData[region][idx] || 0);
       });
     });
+    // Also aggregate individual "Other" regions in local timezone
+    const otherLocalDaily = {};
+    if (d.otherRegions) {
+      d.regionDailyDates.forEach((utcDay, idx) => {
+        const localDay = utcToLocal(utcDay + 'T12:00:00Z').slice(0, 10);
+        d.otherRegions.forEach(region => {
+          if (!otherLocalDaily[region]) otherLocalDaily[region] = {};
+          otherLocalDaily[region][localDay] = (otherLocalDaily[region][localDay] || 0) + (d.otherRegionDailyData[region][idx] || 0);
+        });
+      });
+    }
     const localDays = [...new Set(d.regionDailyDates.map(utcDay => utcToLocal(utcDay + 'T12:00:00Z').slice(0, 10)))].sort();
 
     const regionTraces = [];
@@ -847,6 +872,27 @@ if (!multiMode && regionChartEl) {
 
       const rangeKnown = regionTotals.reduce((s, r) => s + r.total, 0);
 
+      // Build "Other" hover breakdown
+      let otherHover = '';
+      if (d.otherRegions) {
+        const otherBreakdown = d.otherRegions.map(region => {
+          const total = filteredDays.reduce((s, day) => s + ((otherLocalDaily[region] && otherLocalDaily[region][day]) || 0), 0);
+          return { region, total };
+        }).filter(r => r.total > 0).sort((a, b) => b.total - a.total);
+        const shown = otherBreakdown.slice(0, 20);
+        const rest = otherBreakdown.slice(20);
+        otherHover = shown.map(r => r.region + ': ' + r.total).join('<br>');
+        if (rest.length > 0) {
+          const restTotal = rest.reduce((s, r) => s + r.total, 0);
+          otherHover += '<br>...and ' + rest.length + ' more (' + restTotal + ' stars)';
+        }
+      }
+
+      const hoverTexts = regionTotals.map(r => {
+        if (r.region === 'Other' && otherHover) return otherHover;
+        return r.region + ': ' + r.total + ' stars (' + (rangeKnown > 0 ? (r.total / rangeKnown * 100).toFixed(1) : '0') + '%)';
+      });
+
       Plotly.react(totalsEl, [{
         y: regionTotals.map(r => r.region),
         x: regionTotals.map(r => r.total),
@@ -856,8 +902,8 @@ if (!multiMode && regionChartEl) {
         text: regionTotals.map(r => rangeKnown > 0 ? (r.total / rangeKnown * 100).toFixed(1) + '%' : '0%'),
         textposition: 'outside',
         textfont: { color: '#8b949e', size: 11 },
-        customdata: regionTotals.map(r => rangeKnown > 0 ? (r.total / rangeKnown * 100).toFixed(1) : '0'),
-        hovertemplate: '%{y}: %{x} stars (%{customdata}%)<extra></extra>'
+        hovertext: hoverTexts,
+        hovertemplate: '%{hovertext}<extra></extra>'
       }], {
         template: 'plotly_dark',
         paper_bgcolor: '#0d1117',
