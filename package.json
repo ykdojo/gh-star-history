@@ -1,7 +1,7 @@
 {
   "name": "gh-star-history",
-  "version": "0.3.5",
-  "description": "Visualize GitHub star history and regional breakdown as interactive charts, powered by gh CLI",
+  "version": "0.3.6",
+  "description": "Visualize and compare GitHub star history as interactive charts, powered by gh CLI",
   "bin": {
     "gh-star-history": "bin/cli.js"
   },
