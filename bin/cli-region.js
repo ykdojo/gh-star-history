@@ -33,6 +33,10 @@ for (let i = 0; i < args.length; i++) {
     flags.noOpen = true;
   } else if (args[i] === '--no-cache') {
     flags.noCache = true;
+  } else if (args[i] === '--top' && args[i + 1]) {
+    flags.top = parseInt(args[++i], 10);
+  } else if (args[i].startsWith('--top=')) {
+    flags.top = parseInt(args[i].split('=')[1], 10);
   } else if (args[i] === '--help' || args[i] === '-h') {
     flags.help = true;
   } else {
@@ -52,6 +56,7 @@ if (flags.help || positional.length === 0) {
     --output <path>  Output file path (default: ~/.gh-star-history/star-history.html)
     --no-open        Don't auto-open the browser
     --no-cache       Skip cache and fetch fresh data
+    --top <n>        Number of top regions to show (default: 34)
     -h, --help       Show this help
 
   Examples:
@@ -277,7 +282,8 @@ async function fetchRepoStars(repo, onProgress) {
     dailyRegionMap[day][region] = (dailyRegionMap[day][region] || 0) + 1;
   }
 
-  // Find top 34 regions by total
+  // Find top N regions by total
+  const topN = flags.top || 34;
   const totalByRegion = {};
   for (const day of Object.keys(dailyRegionMap)) {
     for (const [region, count] of Object.entries(dailyRegionMap[day])) {
@@ -286,7 +292,7 @@ async function fetchRepoStars(repo, onProgress) {
   }
   const topRegions = Object.entries(totalByRegion)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 34)
+    .slice(0, topN)
     .map(([c]) => c);
 
   // Build region daily data
