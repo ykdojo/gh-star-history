@@ -105,6 +105,3 @@ cd gh-star-history
 node bin/cli.js ykdojo/claude-code-tips
 ```
 
-## License
-
-MIT
