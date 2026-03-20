@@ -698,12 +698,11 @@ Plotly.newPlot(chartEl, traces, baseLayout, plotConfig);
 
 // Granularity (single-repo only)
 let currentBar = 'daily';
+let currentRange = 'all';
 
 if (!multiMode) {
   const d = repoData[0];
   const barIndex = traces.length - 1;
-
-  let currentRange = 'all';
 
   function updateRate() {
     const rateEl = document.getElementById('rate');
@@ -956,7 +955,12 @@ if (!multiMode && regionChartEl) {
       const yArr = reversedRegions.map(r => traceData[granularity][r].y);
       Plotly.restyle(regionChartEl, { x: xArr, y: yArr }, traceIndices);
       const yTitle = granularity === 'hourly' ? 'Stars / Hour' : 'Stars / Day';
-      Plotly.relayout(regionChartEl, { 'yaxis.title.text': yTitle });
+      const r = ranges[currentRange];
+      if (r) {
+        Plotly.relayout(regionChartEl, { 'xaxis.autorange': false, 'xaxis.range': r, 'yaxis.autorange': true, 'yaxis.title.text': yTitle });
+      } else {
+        Plotly.relayout(regionChartEl, { 'xaxis.autorange': true, 'yaxis.autorange': true, 'yaxis.title.text': yTitle });
+      }
     };
 
     // --- Overall region totals bar chart ---

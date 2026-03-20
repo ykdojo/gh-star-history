@@ -1,3 +1,4 @@
 node_modules/
 star-history.html
 test-output.html
+.playwright-mcp/
