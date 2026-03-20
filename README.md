@@ -83,7 +83,7 @@ The cache saves after every batch, so even if a large fetch gets interrupted, pr
 
 ## Region breakdown
 
-Single-repo charts also include a region breakdown showing where stargazers are from (based on their public GitHub location). This includes:
+You can also generate a region breakdown chart showing where stargazers are from (based on their public GitHub location). Use the `/gh-star-region-breakdown` skill in Claude Code to fetch, classify, and generate the chart. This includes:
 
 - A stacked bar chart showing stars by region over time (top 5 regions per day)
 - An overall region breakdown horizontal bar chart with percentages
