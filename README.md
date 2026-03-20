@@ -91,11 +91,7 @@ Single-repo charts also include a region breakdown showing where stargazers are 
 
 The region data responds to the time range and daily/hourly toggles.
 
-To classify new locations not yet in the map, use the `gh-star-region-breakdown` skill or run:
-
-```bash
-node bin/list-unclassified.js <owner/repo>
-```
+Region classification requires AI to map freeform GitHub location strings to regions. To classify locations for a new repo, use the `/gh-star-region-breakdown` skill in Claude Code, which handles fetching, classification, and updating the location map.
 
 ## Development
 
