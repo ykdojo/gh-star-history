@@ -772,15 +772,30 @@ if (!multiMode && countryChartEl) {
     const allCountries = [...d.topCountries, 'Other'];
     const colorByCountry = {};
     allCountries.forEach((country, i) => { colorByCountry[country] = countryColors[i % countryColors.length]; });
+    // For each day, find top 5 countries by count
+    const top5PerDay = {};
+    localDays.forEach(day => {
+      const entries = allCountries
+        .map(c => ({ c, v: (countryLocalDaily[c] && countryLocalDaily[c][day]) || 0 }))
+        .filter(e => e.v > 0)
+        .sort((a, b) => b.v - a.v)
+        .slice(0, 5);
+      top5PerDay[day] = new Set(entries.map(e => e.c));
+    });
+
     // Reverse trace order so most frequent country is on top of stack
     [...allCountries].reverse().forEach(country => {
       countryTraces.push({
         x: localDays,
-        y: localDays.map(day => (countryLocalDaily[country] && countryLocalDaily[country][day]) || 0),
+        y: localDays.map(day => {
+          const v = (countryLocalDaily[country] && countryLocalDaily[country][day]) || 0;
+          if (v === 0 || !top5PerDay[day].has(country)) return null;
+          return v;
+        }),
         type: 'bar',
         name: country,
         marker: { color: colorByCountry[country] },
-        hovertemplate: country + '<br>%{x|%b %d, %Y}<br>%{y} stars<extra></extra>'
+        hovertemplate: country + ': %{y}<extra></extra>'
       });
     });
 
