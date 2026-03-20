@@ -1,5 +1,7 @@
 # gh-star-history
 
+![overall](overall.png)
+
 Visualize and compare GitHub star history as interactive charts. Powered by the [GitHub CLI](https://cli.github.com/) - no API tokens needed.
 
 For example, if you want to see the star growth of [claude-code-tips](https://github.com/ykdojo/claude-code-tips):
@@ -84,6 +86,8 @@ The cache saves after every batch, so even if a large fetch gets interrupted, pr
 ## Region breakdown
 
 You can also generate a region breakdown chart showing where stargazers are from, based on their public GitHub location. Since location strings are freeform, AI is needed to classify them - use the `/gh-star-region-breakdown` skill in Claude Code to handle fetching, classification, and chart generation.
+
+![region](region.png)
 
 The region breakdown includes:
 
