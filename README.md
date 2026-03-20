@@ -2,7 +2,7 @@
 
 ![star-history-with-regions](star-history-with-regions.png)
 
-Visualize and compare GitHub star history as interactive charts. Powered by the [GitHub CLI](https://cli.github.com/) - no API tokens needed.
+Visualize GitHub star history and regional breakdown as interactive charts. Powered by the [GitHub CLI](https://cli.github.com/) - no API tokens needed.
 
 For example, if you want to see the star growth of [claude-code-tips](https://github.com/ykdojo/claude-code-tips):
 
