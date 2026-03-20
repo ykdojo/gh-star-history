@@ -81,6 +81,22 @@ Three styles matching GitHub's dark theme palette:
 
 The cache saves after every batch, so even if a large fetch gets interrupted, progress is kept. Single-repo charts show both cumulative stars (line) and stars per day (bars) on a dual-axis layout. Multi-repo charts show cumulative lines with a legend for comparison.
 
+## Region breakdown
+
+Single-repo charts also include a region breakdown showing where stargazers are from (based on their public GitHub location). This includes:
+
+- A stacked bar chart showing stars by region over time (top 5 regions per day)
+- An overall region breakdown horizontal bar chart with percentages
+- Hover over "Other" to see the full breakdown of smaller regions
+
+The region data responds to the time range and daily/hourly toggles.
+
+To classify new locations not yet in the map, use the `gh-star-region-breakdown` skill or run:
+
+```bash
+node bin/list-unclassified.js <owner/repo>
+```
+
 ## Development
 
 ```bash
