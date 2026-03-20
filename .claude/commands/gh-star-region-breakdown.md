@@ -55,3 +55,5 @@ Run the CLI again to generate the chart with updated mappings:
 ```
 node bin/cli-region.js <owner/repo>
 ```
+
+This will open the chart in the browser automatically. Do NOT run a separate `open` command.
