@@ -95,7 +95,7 @@ if (repoList.length > 10) {
 const multiMode = repoList.length > 1;
 
 const style = flags.style || 'blue';
-const defaultFilename = repoList.map(r => r.replace('/', '__')).join('__') + '.html';
+const defaultFilename = repoList.map(r => r.replace('/', '__')).join('__') + '_regions.html';
 const outputPath = flags.output || path.join(os.homedir(), '.gh-star-history', defaultFilename);
 
 const validStyles = ['blue', 'green', 'purple'];
