@@ -718,6 +718,7 @@ if (!multiMode) {
           Plotly.relayout(chartEl, { 'xaxis.autorange': true, 'yaxis2.title.text': y2Title });
           if (regionChartEl) Plotly.relayout(regionChartEl, { 'xaxis.autorange': true });
         }
+        if (updateTotalsChart) updateTotalsChart(currentRange);
       });
     });
   });
@@ -741,6 +742,7 @@ if (!multiMode) {
     });
   });
 }
+let updateTotalsChart = null;
 // --- Region breakdown chart (single-repo only) ---
 const regionChartEl = document.getElementById('region-chart');
 const regionColors = [
@@ -824,27 +826,37 @@ if (!multiMode && regionChartEl) {
 
     // --- Overall region totals bar chart ---
     const totalsEl = document.getElementById('region-totals-chart');
-    if (totalsEl) {
+    updateTotalsChart = function(rangeKey) {
+      if (!totalsEl) return;
+      const r = ranges[rangeKey];
+      const startMs = r ? new Date(r[0]).getTime() : 0;
+      const endMs = r ? new Date(r[1]).getTime() : Infinity;
+      const filteredDays = localDays.filter(day => {
+        const t = new Date(day).getTime();
+        return t >= startMs && t <= endMs;
+      });
+
       const regionTotals = allRegions.map(region => {
-        const vals = localDays.map(day => (regionLocalDaily[region] && regionLocalDaily[region][day]) || 0);
-        return { region, total: vals.reduce((a, b) => a + b, 0) };
+        const total = filteredDays.reduce((s, day) => s + ((regionLocalDaily[region] && regionLocalDaily[region][day]) || 0), 0);
+        return { region, total };
       }).sort((a, b) => {
-        // "Other" always at bottom (first in ascending = bottom of horizontal bar)
         if (a.region === 'Other') return -1;
         if (b.region === 'Other') return 1;
         return a.total - b.total;
       });
 
-      Plotly.newPlot(totalsEl, [{
+      const rangeKnown = regionTotals.reduce((s, r) => s + r.total, 0);
+
+      Plotly.react(totalsEl, [{
         y: regionTotals.map(r => r.region),
         x: regionTotals.map(r => r.total),
         type: 'bar',
         orientation: 'h',
         marker: { color: regionTotals.map(r => colorByRegion[r.region]) },
-        text: regionTotals.map(r => (r.total / d.knownCount * 100).toFixed(1) + '%'),
+        text: regionTotals.map(r => rangeKnown > 0 ? (r.total / rangeKnown * 100).toFixed(1) + '%' : '0%'),
         textposition: 'outside',
         textfont: { color: '#8b949e', size: 11 },
-        customdata: regionTotals.map(r => (r.total / d.knownCount * 100).toFixed(1)),
+        customdata: regionTotals.map(r => rangeKnown > 0 ? (r.total / rangeKnown * 100).toFixed(1) : '0'),
         hovertemplate: '%{y}: %{x} stars (%{customdata}%)<extra></extra>'
       }], {
         template: 'plotly_dark',
@@ -856,7 +868,8 @@ if (!multiMode && regionChartEl) {
         height: Math.max(400, allRegions.length * 22),
         showlegend: false,
       }, plotConfig);
-    }
+    };
+    updateTotalsChart('all');
   }
 }
 <\/script>
