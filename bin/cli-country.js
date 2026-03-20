@@ -839,7 +839,7 @@ if (!multiMode && regionChartEl) {
       const regionTotals = allRegions.map(region => {
         const total = filteredDays.reduce((s, day) => s + ((regionLocalDaily[region] && regionLocalDaily[region][day]) || 0), 0);
         return { region, total };
-      }).sort((a, b) => {
+      }).filter(r => r.total > 0).sort((a, b) => {
         if (a.region === 'Other') return -1;
         if (b.region === 'Other') return 1;
         return a.total - b.total;
