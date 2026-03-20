@@ -1,6 +1,6 @@
 ---
-name: region-breakdown
-description: Fetch stargazer locations, classify countries, and generate a region breakdown chart
+name: gh-star-region-breakdown
+description: Fetch stargazer locations, classify regions, and generate a region breakdown chart
 argument-hint: <owner/repo>
 ---
 
@@ -30,7 +30,7 @@ Paginate through all results. Show progress as you go.
 
 From the stargazers CSV, extract unique location strings with their counts. Save to `/tmp/locations.csv` with columns: `location, count`.
 
-### 3. Classify locations into countries
+### 3. Classify locations into regions
 
 Split the locations into batches of ~200 and spawn parallel subagents to classify each batch. Each subagent should:
 
@@ -52,7 +52,7 @@ After all subagents complete:
 1. Build a location-to-region mapping from all classified files
 2. Read the stargazers CSV and add region column
 3. Show overall region breakdown (top 20 with percentages)
-4. Show weekly waves (top 5 countries per week) to identify viral spread patterns
+4. Show weekly waves (top 5 regions per week) to identify viral spread patterns
 
 ### 5. Update location map
 
@@ -60,4 +60,4 @@ Merge the new classified locations into `bin/location_map.json` in the project, 
 
 ### 6. Generate the chart
 
-Run `node bin/cli-region.js <owner/repo>` to generate the HTML chart with the region breakdown visualization. This uses the updated location map and fetches fresh data with locations.
+Run `node bin/cli-country.js <owner/repo>` to generate the HTML chart with the region breakdown visualization. This uses the updated location map and fetches fresh data with locations.
