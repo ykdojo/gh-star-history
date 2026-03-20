@@ -754,10 +754,10 @@ if (!multiMode) {
         const y2Title = currentBar === 'hourly' ? 'Stars / Hour' : 'Stars / Day';
         if (ranges[currentRange]) {
           Plotly.relayout(chartEl, { 'xaxis.autorange': false, 'xaxis.range': ranges[currentRange], 'yaxis2.title.text': y2Title });
-          if (regionChartEl) Plotly.relayout(regionChartEl, { 'xaxis.autorange': false, 'xaxis.range': ranges[currentRange] });
+          if (updateRegionRange) updateRegionRange(currentRange);
         } else {
           Plotly.relayout(chartEl, { 'xaxis.autorange': true, 'yaxis2.title.text': y2Title });
-          if (regionChartEl) Plotly.relayout(regionChartEl, { 'xaxis.autorange': true });
+          if (updateRegionRange) updateRegionRange(currentRange);
         }
         if (updateTotalsChart) updateTotalsChart(currentRange);
       });
@@ -785,6 +785,7 @@ if (!multiMode) {
 }
 let updateTotalsChart = null;
 let updateRegionGranularity = null;
+let updateRegionRange = null;
 // --- Region breakdown chart (single-repo only) ---
 const regionChartEl = document.getElementById('region-chart');
 const regionColors = [
@@ -906,7 +907,40 @@ if (!multiMode && regionChartEl) {
     Plotly.newPlot(regionChartEl, regionTraces, regionLayout, plotConfig);
 
     const traceIndices = reversedRegions.map((_, i) => i);
+    let currentRegionGranularity = 'daily';
+
+    function getRegionYMax(granularity, rangeKey) {
+      const r = ranges[rangeKey];
+      const startMs = r ? new Date(r[0]).getTime() : 0;
+      const endMs = r ? new Date(r[1]).getTime() : Infinity;
+      const timeBuckets = granularity === 'hourly' ? localHours : localDays;
+      const xVals = traceData[granularity][allRegions[0]].x;
+      let maxStack = 0;
+      for (let i = 0; i < xVals.length; i++) {
+        const t = new Date(xVals[i]).getTime();
+        if (t < startMs || t > endMs) continue;
+        let stack = 0;
+        for (const region of allRegions) {
+          const v = traceData[granularity][region].y[i];
+          if (v) stack += v;
+        }
+        if (stack > maxStack) maxStack = stack;
+      }
+      return maxStack;
+    }
+
+    updateRegionRange = function(rangeKey) {
+      const yMax = getRegionYMax(currentRegionGranularity, rangeKey);
+      const r = ranges[rangeKey];
+      if (r) {
+        Plotly.relayout(regionChartEl, { 'xaxis.autorange': false, 'xaxis.range': r, 'yaxis.autorange': false, 'yaxis.range': [0, yMax * 1.1] });
+      } else {
+        Plotly.relayout(regionChartEl, { 'xaxis.autorange': true, 'yaxis.autorange': true });
+      }
+    };
+
     updateRegionGranularity = function(granularity) {
+      currentRegionGranularity = granularity;
       const xArr = reversedRegions.map(r => traceData[granularity][r].x);
       const yArr = reversedRegions.map(r => traceData[granularity][r].y);
       Plotly.restyle(regionChartEl, { x: xArr, y: yArr }, traceIndices);
