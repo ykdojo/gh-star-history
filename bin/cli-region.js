@@ -453,7 +453,7 @@ const chartTitle = multiMode
 
 const chartSubtitle = multiMode
   ? repoData.map(d => `<a href="https://github.com/${d.repo}" target="_blank" style="color:#8b949e">${d.repo}</a>`).join(' vs ')
-  : `${d0.displayCount.toLocaleString()} stars · <span id="rate"></span>`;
+  : `<span id="star-info">${d0.displayCount.toLocaleString()} stars</span> · <span id="rate"></span>`;
 
 const granularityToggle = multiMode ? '' : `
     <span style="margin-left: 12px; border-left: 1px solid #30363d; padding-left: 16px;">
@@ -737,23 +737,60 @@ if (!multiMode) {
   const d = repoData[0];
   const barIndex = traces.length - 1;
 
+  // Pre-compute timestamps for star dates
+  const starTimestamps = d.dates.map(dt => new Date(dt).getTime());
+
   function countStarsInRange(startMs, endMs) {
     let count = 0;
-    for (let i = 0; i < d.dates.length; i++) {
-      const t = new Date(d.dates[i]).getTime();
-      if (t >= startMs && t <= endMs) count++;
+    for (let i = 0; i < starTimestamps.length; i++) {
+      if (starTimestamps[i] >= startMs && starTimestamps[i] <= endMs) count++;
+    }
+    return count;
+  }
+
+  function countStarsBefore(ms) {
+    let count = 0;
+    for (let i = 0; i < starTimestamps.length; i++) {
+      if (starTimestamps[i] < ms) count++;
     }
     return count;
   }
 
   function updateRate() {
     const rateEl = document.getElementById('rate');
+    const starInfoEl = document.getElementById('star-info');
     if (!rateEl) return;
-    const dataStart = new Date(d.dates[0]).getTime();
-    const rangeStart = ranges[currentRange] ? new Date(ranges[currentRange][0]).getTime() : dataStart;
-    const rangeEnd = ranges[currentRange] ? new Date(ranges[currentRange][1]).getTime() : new Date(d.dates[d.dates.length - 1]).getTime();
+    const dataStart = starTimestamps[0];
+    const isAllTime = !ranges[currentRange];
+    const rangeStart = isAllTime ? dataStart : new Date(ranges[currentRange][0]).getTime();
+    const rangeEnd = isAllTime ? starTimestamps[starTimestamps.length - 1] : new Date(ranges[currentRange][1]).getTime();
     const starsInRange = countStarsInRange(rangeStart, rangeEnd);
     const hours = (rangeEnd - rangeStart) / (1000 * 60 * 60);
+
+    // Update star info
+    if (starInfoEl) {
+      if (isAllTime) {
+        const totalMs = rangeEnd - dataStart;
+        const totalDays = Math.floor(totalMs / (24 * 60 * 60 * 1000));
+        const totalMonths = Math.floor(totalMs / (30.44 * 24 * 60 * 60 * 1000));
+        const years = Math.floor(totalMonths / 12);
+        const months = totalMonths % 12;
+        const remainderDays = totalDays - Math.floor(totalMonths * 30.44);
+        let duration = '';
+        if (years >= 1) {
+          duration = years + (years === 1 ? ' year' : ' years');
+          if (months > 0) duration += ', ' + months + (months === 1 ? ' month' : ' months');
+        } else {
+          duration = months + (months === 1 ? ' month' : ' months');
+          if (remainderDays > 0) duration += ', ' + remainderDays + (remainderDays === 1 ? ' day' : ' days');
+        }
+        starInfoEl.textContent = d.cumulative[d.cumulative.length - 1].toLocaleString() + ' stars (over ' + duration + ')';
+      } else {
+        const startCount = countStarsBefore(rangeStart);
+        const endCount = startCount + starsInRange;
+        starInfoEl.innerHTML = startCount.toLocaleString() + ' \u2192 ' + endCount.toLocaleString() + ' <span style="color:#3fb950">(+' + starsInRange.toLocaleString() + ' stars)</span>';
+      }
+    }
 
     let rateText;
     if (currentBar === 'hourly') {
