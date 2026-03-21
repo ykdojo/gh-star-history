@@ -1171,6 +1171,9 @@ if (!multiMode && regionChartEl) {
 
       // Rebuild totals chart
       rebuildTotalsChart(result);
+
+      // Ensure stacked chart doesn't collapse after totals chart resizes
+      requestAnimationFrame(() => Plotly.Plots.resize(regionChartEl));
     }
 
     function rebuildTotalsChart(result) {
