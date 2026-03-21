@@ -634,25 +634,51 @@ if (!multiMode) {
 
   let currentRange = 'all';
 
+  function countStarsInRange(startMs, endMs) {
+    let count = 0;
+    for (let i = 0; i < d.dates.length; i++) {
+      const t = new Date(d.dates[i]).getTime();
+      if (t >= startMs && t <= endMs) count++;
+    }
+    return count;
+  }
+
   function updateRate() {
     const rateEl = document.getElementById('rate');
     if (!rateEl) return;
-    const rangeStart = ranges[currentRange] ? new Date(ranges[currentRange][0]).getTime() : new Date(d.dates[0]).getTime();
+    const dataStart = new Date(d.dates[0]).getTime();
+    const rangeStart = ranges[currentRange] ? new Date(ranges[currentRange][0]).getTime() : dataStart;
     const rangeEnd = ranges[currentRange] ? new Date(ranges[currentRange][1]).getTime() : new Date(d.dates[d.dates.length - 1]).getTime();
-    let starsInRange = 0;
-    for (let i = 0; i < d.dates.length; i++) {
-      const t = new Date(d.dates[i]).getTime();
-      if (t >= rangeStart && t <= rangeEnd) starsInRange++;
-    }
+    const starsInRange = countStarsInRange(rangeStart, rangeEnd);
     const hours = (rangeEnd - rangeStart) / (1000 * 60 * 60);
+
+    let rateText;
     if (currentBar === 'hourly') {
       const perHour = hours > 0 ? (starsInRange / hours).toFixed(2) : '0';
-      rateEl.textContent = perHour + ' stars/hour';
+      rateText = perHour + ' stars/hour';
     } else {
       const days = hours / 24;
       const perDay = days > 0 ? (starsInRange / days).toFixed(1) : '0';
-      rateEl.textContent = perDay + ' stars/day';
+      rateText = perDay + ' stars/day';
     }
+
+    // Compare with previous equivalent period
+    const durationMs = rangeEnd - rangeStart;
+    const prevEnd = rangeStart;
+    const prevStart = rangeStart - durationMs;
+    if (prevStart >= dataStart && durationMs > 0) {
+      const prevStars = countStarsInRange(prevStart, prevEnd);
+      const prevRate = prevStars / (durationMs / (1000 * 60 * 60 * 24));
+      const currRate = starsInRange / (durationMs / (1000 * 60 * 60 * 24));
+      if (prevRate > 0) {
+        const pctChange = ((currRate - prevRate) / prevRate * 100).toFixed(1);
+        const sign = pctChange >= 0 ? '+' : '';
+        const color = pctChange >= 0 ? '#3fb950' : '#f85149';
+        rateText += ' <span style="color:' + color + '">' + sign + pctChange + '%</span>';
+      }
+    }
+
+    rateEl.innerHTML = rateText;
   }
 
   function setGranularity(granularity) {
