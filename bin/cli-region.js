@@ -279,49 +279,28 @@ async function fetchRepoStars(repo, onProgress) {
     dailyRegionMap[day][region] = (dailyRegionMap[day][region] || 0) + 1;
   }
 
-  // Find top N regions by total
-  const topN = flags.top || 34;
+  // Collect all regions sorted by total count
+  const defaultTopN = flags.top || 10;
   const totalByRegion = {};
   for (const day of Object.keys(dailyRegionMap)) {
     for (const [region, count] of Object.entries(dailyRegionMap[day])) {
       totalByRegion[region] = (totalByRegion[region] || 0) + count;
     }
   }
-  const topRegions = Object.entries(totalByRegion)
+  const allRegionNames = Object.entries(totalByRegion)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, topN)
     .map(([c]) => c);
 
-  // Build region daily data
+  // Build region daily data for ALL regions
   const regionDailyDates = Object.keys(dailyRegionMap).sort();
   const regionDailyData = {};
-  for (const region of topRegions) {
+  for (const region of allRegionNames) {
     regionDailyData[region] = regionDailyDates.map(day =>
       (dailyRegionMap[day] && dailyRegionMap[day][region]) || 0
     );
   }
-  // "Other" bucket
-  regionDailyData['Other'] = regionDailyDates.map(day => {
-    let other = 0;
-    for (const [region, count] of Object.entries(dailyRegionMap[day] || {})) {
-      if (!topRegions.includes(region)) other += count;
-    }
-    return other;
-  });
 
-  // Individual "Other" regions for hover breakdown
-  const otherRegions = Object.entries(totalByRegion)
-    .filter(([r]) => !topRegions.includes(r))
-    .sort((a, b) => b[1] - a[1])
-    .map(([r]) => r);
-  const otherRegionDailyData = {};
-  for (const region of otherRegions) {
-    otherRegionDailyData[region] = regionDailyDates.map(day =>
-      (dailyRegionMap[day] && dailyRegionMap[day][region]) || 0
-    );
-  }
-
-  // Aggregate hourly region counts
+  // Aggregate hourly region counts for ALL regions
   const hourlyRegionMap = {}; // hour -> region -> count
   for (let i = 0; i < dates.length; i++) {
     const region = regionPerStar[i];
@@ -332,18 +311,11 @@ async function fetchRepoStars(repo, onProgress) {
   }
   const regionHourlyDates = Object.keys(hourlyRegionMap).sort().map(h => h + ':00:00Z');
   const regionHourlyData = {};
-  for (const region of topRegions) {
+  for (const region of allRegionNames) {
     regionHourlyData[region] = Object.keys(hourlyRegionMap).sort().map(h =>
       (hourlyRegionMap[h] && hourlyRegionMap[h][region]) || 0
     );
   }
-  regionHourlyData['Other'] = Object.keys(hourlyRegionMap).sort().map(h => {
-    let other = 0;
-    for (const [region, count] of Object.entries(hourlyRegionMap[h] || {})) {
-      if (!topRegions.includes(region)) other += count;
-    }
-    return other;
-  });
 
   const knownCount = Object.values(totalByRegion).reduce((a, b) => a + b, 0);
 
@@ -370,7 +342,7 @@ async function fetchRepoStars(repo, onProgress) {
   const hourlyDates = Object.keys(hourlyCounts).sort().map(h => h + ':00:00Z');
   const hourlyValues = Object.keys(hourlyCounts).sort().map(h => hourlyCounts[h]);
 
-  return { dates, cumulative, dailyDates, dailyValues, hourlyDates, hourlyValues, displayCount, regionDailyDates, regionDailyData, regionHourlyDates, regionHourlyData, topRegions, otherRegions, otherRegionDailyData, knownCount };
+  return { dates, cumulative, dailyDates, dailyValues, hourlyDates, hourlyValues, displayCount, regionDailyDates, regionDailyData, regionHourlyDates, regionHourlyData, allRegionNames, defaultTopN, knownCount };
 }
 
 // Fetch all repos
@@ -502,9 +474,8 @@ const clientRepoData = JSON.stringify(repoData.map((d, i) => ({
   regionDailyData: d.regionDailyData,
   regionHourlyDates: d.regionHourlyDates,
   regionHourlyData: d.regionHourlyData,
-  topRegions: d.topRegions,
-  otherRegions: d.otherRegions,
-  otherRegionDailyData: d.otherRegionDailyData,
+  allRegionNames: d.allRegionNames,
+  defaultTopN: d.defaultTopN,
   knownCount: d.knownCount,
   color: multiMode ? multiColors[i % multiColors.length] : s.lineColor,
   fillColor: multiMode ? 'transparent' : s.fillColor,
@@ -584,6 +555,11 @@ const html = `<!DOCTYPE html>
   <div id="region-section" style="display:none; margin-top: 32px;">
     <h2 style="text-align:center; font-size:18px; color:#e6edf3; margin-bottom:4px;">Stars by region</h2>
     <div id="region-subtitle" style="text-align:center; color:#8b949e; font-size:13px; margin-bottom:12px;"></div>
+    <div style="text-align:center; margin-bottom:12px;">
+      <span style="color:#8b949e; font-size:13px;">Top</span>
+      <input type="number" id="top-n-input" class="date-input" style="width:60px;margin-left:4px;text-align:center" min="1">
+      <span style="color:#8b949e; font-size:13px; margin-left:4px;">regions</span>
+    </div>
     <div id="region-chart"></div>
     <h2 style="text-align:center; font-size:18px; color:#e6edf3; margin: 32px 0 12px 0;">Overall region breakdown</h2>
     <div id="region-totals-chart"></div>
@@ -926,92 +902,126 @@ const regionColors = [
 
 if (!multiMode && regionChartEl) {
   const d = repoData[0];
-  if (d.regionDailyDates && d.topRegions && d.topRegions.length > 0) {
+  if (d.regionDailyDates && d.allRegionNames && d.allRegionNames.length > 0) {
     document.getElementById('region-section').style.display = 'block';
     document.getElementById('region-subtitle').textContent = d.knownCount + ' of ' + (d.dates.length - 1) + ' stargazers have a public location set';
 
-    // Re-aggregate region dates in local timezone (daily)
+    // Set up top N input
+    const topNInput = document.getElementById('top-n-input');
+    let currentTopN = d.defaultTopN;
+    topNInput.value = currentTopN;
+    topNInput.max = d.allRegionNames.length;
+
+    // Re-aggregate ALL region dates in local timezone (daily)
     const regionLocalDaily = {};
     d.regionDailyDates.forEach((utcDay, idx) => {
       const localDay = utcToLocal(utcDay + 'T12:00:00Z').slice(0, 10);
-      const allRegions = [...d.topRegions, 'Other'];
-      allRegions.forEach(region => {
+      d.allRegionNames.forEach(region => {
         if (!regionLocalDaily[region]) regionLocalDaily[region] = {};
         regionLocalDaily[region][localDay] = (regionLocalDaily[region][localDay] || 0) + (d.regionDailyData[region][idx] || 0);
       });
     });
-    // Re-aggregate region dates in local timezone (hourly)
+    // Re-aggregate ALL region dates in local timezone (hourly)
     const regionLocalHourly = {};
     if (d.regionHourlyDates) {
       d.regionHourlyDates.forEach((utcHour, idx) => {
         const localHour = utcToLocal(utcHour).slice(0, 13);
-        const allRegions = [...d.topRegions, 'Other'];
-        allRegions.forEach(region => {
+        d.allRegionNames.forEach(region => {
           if (!regionLocalHourly[region]) regionLocalHourly[region] = {};
           regionLocalHourly[region][localHour] = (regionLocalHourly[region][localHour] || 0) + (d.regionHourlyData[region][idx] || 0);
-        });
-      });
-    }
-    // Also aggregate individual "Other" regions in local timezone
-    const otherLocalDaily = {};
-    if (d.otherRegions) {
-      d.regionDailyDates.forEach((utcDay, idx) => {
-        const localDay = utcToLocal(utcDay + 'T12:00:00Z').slice(0, 10);
-        d.otherRegions.forEach(region => {
-          if (!otherLocalDaily[region]) otherLocalDaily[region] = {};
-          otherLocalDaily[region][localDay] = (otherLocalDaily[region][localDay] || 0) + (d.otherRegionDailyData[region][idx] || 0);
         });
       });
     }
     const localDays = [...new Set(d.regionDailyDates.map(utcDay => utcToLocal(utcDay + 'T12:00:00Z').slice(0, 10)))].sort();
     const localHours = d.regionHourlyDates ? [...new Set(d.regionHourlyDates.map(utcHour => utcToLocal(utcHour).slice(0, 13)))].sort() : [];
 
-    // Build in frequency order so colors are assigned by rank
-    const allRegions = [...d.topRegions, 'Other'];
-    const colorByRegion = {};
-    allRegions.forEach((region, i) => { colorByRegion[region] = regionColors[i % regionColors.length]; });
+    let currentRegionGranularity = 'daily';
 
-    // Pre-compute trace data for both granularities
-    const traceData = {};
-    ['daily', 'hourly'].forEach(gran => {
-      const timeBuckets = gran === 'hourly' ? localHours : localDays;
-      const regionLocal = gran === 'hourly' ? regionLocalHourly : regionLocalDaily;
-      const top5PerBucket = {};
-      timeBuckets.forEach(bucket => {
-        const entries = allRegions
-          .map(c => ({ c, v: (regionLocal[c] && regionLocal[c][bucket]) || 0 }))
-          .filter(e => e.v > 0)
-          .sort((a, b) => b.v - a.v)
-          .slice(0, 5);
-        top5PerBucket[bucket] = new Set(entries.map(e => e.c));
+    // Compute top N regions for a given date range, return { topRegions, displayRegions (with Other) }
+    function computeTopRegions(topN, rangeKey) {
+      const r = ranges[rangeKey];
+      const startMs = r ? new Date(r[0]).getTime() : 0;
+      const endMs = r ? new Date(r[1]).getTime() : Infinity;
+      const filteredDays = localDays.filter(day => {
+        const t = new Date(day).getTime();
+        return t >= startMs && t <= endMs;
       });
-      const xVals = gran === 'hourly' ? timeBuckets.map(h => h + ':00:00') : timeBuckets;
-      traceData[gran] = {};
-      allRegions.forEach(region => {
-        traceData[gran][region] = {
-          x: xVals,
-          y: timeBuckets.map(bucket => {
-            const v = (regionLocal[region] && regionLocal[region][bucket]) || 0;
-            if (v === 0 || !top5PerBucket[bucket].has(region)) return null;
-            return v;
-          })
-        };
+      // Sum each region's stars in the range
+      const totals = d.allRegionNames.map(region => {
+        const total = filteredDays.reduce((s, day) => s + ((regionLocalDaily[region] && regionLocalDaily[region][day]) || 0), 0);
+        return { region, total };
+      }).filter(r => r.total > 0).sort((a, b) => b.total - a.total);
+
+      const topRegions = totals.slice(0, topN).map(r => r.region);
+      const otherRegions = totals.slice(topN).map(r => r.region);
+      return { topRegions, otherRegions, filteredDays };
+    }
+
+    // Build color map - assign colors based on all-time rank so colors stay stable
+    const colorByRegion = { 'Other': '#5D7092' };
+    d.allRegionNames.forEach((region, i) => { colorByRegion[region] = regionColors[i % regionColors.length]; });
+
+    // Build trace data for a set of display regions (topRegions + Other)
+    function buildTraceData(topRegions) {
+      const displayRegions = [...topRegions, 'Other'];
+      const td = {};
+      ['daily', 'hourly'].forEach(gran => {
+        const timeBuckets = gran === 'hourly' ? localHours : localDays;
+        const regionLocal = gran === 'hourly' ? regionLocalHourly : regionLocalDaily;
+        // Compute "Other" values
+        const otherVals = {};
+        timeBuckets.forEach(bucket => {
+          let other = 0;
+          d.allRegionNames.forEach(region => {
+            if (!topRegions.includes(region)) {
+              other += (regionLocal[region] && regionLocal[region][bucket]) || 0;
+            }
+          });
+          otherVals[bucket] = other;
+        });
+        // Top 5 per bucket for stacked chart visibility
+        const top5PerBucket = {};
+        timeBuckets.forEach(bucket => {
+          const entries = displayRegions
+            .map(c => ({ c, v: c === 'Other' ? otherVals[bucket] : ((regionLocal[c] && regionLocal[c][bucket]) || 0) }))
+            .filter(e => e.v > 0)
+            .sort((a, b) => b.v - a.v)
+            .slice(0, 5);
+          top5PerBucket[bucket] = new Set(entries.map(e => e.c));
+        });
+        const xVals = gran === 'hourly' ? timeBuckets.map(h => h + ':00:00') : timeBuckets;
+        td[gran] = {};
+        displayRegions.forEach(region => {
+          td[gran][region] = {
+            x: xVals,
+            y: timeBuckets.map(bucket => {
+              const v = region === 'Other' ? otherVals[bucket] : ((regionLocal[region] && regionLocal[region][bucket]) || 0);
+              if (v === 0 || !top5PerBucket[bucket].has(region)) return null;
+              return v;
+            })
+          };
+        });
       });
-    });
+      return td;
+    }
+
+    // Initial computation
+    let { topRegions, otherRegions } = computeTopRegions(currentTopN, 'all');
+    let displayRegions = [...topRegions, 'Other'];
+    let traceData = buildTraceData(topRegions);
 
     // Build initial traces (daily)
-    const regionTraces = [];
-    const reversedRegions = [...allRegions].reverse();
-    reversedRegions.forEach(region => {
-      regionTraces.push({
-        x: traceData.daily[region].x,
-        y: traceData.daily[region].y,
+    function buildRegionTraces(displayRegs, td, gran) {
+      const reversed = [...displayRegs].reverse();
+      return reversed.map(region => ({
+        x: td[gran][region].x,
+        y: td[gran][region].y,
         type: 'bar',
         name: region,
         marker: { color: colorByRegion[region] },
         hovertemplate: region + ': %{y}<extra></extra>'
-      });
-    });
+      }));
+    }
 
     const regionLayout = {
       template: 'plotly_dark',
@@ -1027,71 +1037,56 @@ if (!multiMode && regionChartEl) {
       height: 350,
     };
 
-    Plotly.newPlot(regionChartEl, regionTraces, regionLayout, plotConfig);
+    Plotly.newPlot(regionChartEl, buildRegionTraces(displayRegions, traceData, 'daily'), regionLayout, plotConfig);
 
-    const traceIndices = reversedRegions.map((_, i) => i);
-    let currentRegionGranularity = 'daily';
+    // Full rebuild of both region charts
+    function rebuildRegionCharts() {
+      const result = computeTopRegions(currentTopN, currentRange);
+      topRegions = result.topRegions;
+      otherRegions = result.otherRegions;
+      displayRegions = [...topRegions, 'Other'];
+      traceData = buildTraceData(topRegions);
 
-    function getRegionYMax(granularity, rangeKey) {
-      const r = ranges[rangeKey];
-      const startMs = r ? new Date(r[0]).getTime() : 0;
-      const endMs = r ? new Date(r[1]).getTime() : Infinity;
-      const timeBuckets = granularity === 'hourly' ? localHours : localDays;
-      const xVals = traceData[granularity][allRegions[0]].x;
-      let maxStack = 0;
-      for (let i = 0; i < xVals.length; i++) {
-        const t = new Date(xVals[i]).getTime();
-        if (t < startMs || t > endMs) continue;
-        let stack = 0;
-        for (const region of allRegions) {
-          const v = traceData[granularity][region].y[i];
-          if (v) stack += v;
-        }
-        if (stack > maxStack) maxStack = stack;
+      const gran = currentRegionGranularity;
+      const yTitle = gran === 'hourly' ? 'Stars / Hour' : 'Stars / Day';
+      const r = ranges[currentRange];
+
+      // Rebuild stacked bar chart
+      const layout = Object.assign({}, regionLayout, { yaxis: Object.assign({}, regionLayout.yaxis, { title: { text: yTitle, font: { color: '#8b949e' } } }) });
+      if (r) {
+        layout.xaxis = Object.assign({}, layout.xaxis, { autorange: false, range: r });
       }
-      return maxStack;
+      Plotly.react(regionChartEl, buildRegionTraces(displayRegions, traceData, gran), layout, plotConfig);
+
+      // Rebuild totals chart
+      rebuildTotalsChart(result);
     }
 
-    updateRegionRange = function(rangeKey) {
-      const yMax = getRegionYMax(currentRegionGranularity, rangeKey);
-      const r = ranges[rangeKey];
-      if (r) {
-        Plotly.relayout(regionChartEl, { 'xaxis.autorange': false, 'xaxis.range': r, 'yaxis.autorange': false, 'yaxis.range': [0, yMax * 1.1] });
-      } else {
-        Plotly.relayout(regionChartEl, { 'xaxis.autorange': true, 'yaxis.autorange': true });
-      }
-    };
-
-    updateRegionGranularity = function(granularity) {
-      currentRegionGranularity = granularity;
-      const xArr = reversedRegions.map(r => traceData[granularity][r].x);
-      const yArr = reversedRegions.map(r => traceData[granularity][r].y);
-      Plotly.restyle(regionChartEl, { x: xArr, y: yArr }, traceIndices);
-      const yTitle = granularity === 'hourly' ? 'Stars / Hour' : 'Stars / Day';
-      const r = ranges[currentRange];
-      if (r) {
-        Plotly.relayout(regionChartEl, { 'xaxis.autorange': false, 'xaxis.range': r, 'yaxis.autorange': true, 'yaxis.title.text': yTitle });
-      } else {
-        Plotly.relayout(regionChartEl, { 'xaxis.autorange': true, 'yaxis.autorange': true, 'yaxis.title.text': yTitle });
-      }
-    };
-
-    // --- Overall region totals bar chart ---
-    const totalsEl = document.getElementById('region-totals-chart');
-    updateTotalsChart = function(rangeKey) {
+    function rebuildTotalsChart(result) {
+      const totalsEl = document.getElementById('region-totals-chart');
       if (!totalsEl) return;
-      const r = ranges[rangeKey];
-      const startMs = r ? new Date(r[0]).getTime() : 0;
-      const endMs = r ? new Date(r[1]).getTime() : Infinity;
-      const filteredDays = localDays.filter(day => {
-        const t = new Date(day).getTime();
-        return t >= startMs && t <= endMs;
-      });
+      const { topRegions: topRegs, otherRegions: otherRegs, filteredDays } = result || computeTopRegions(currentTopN, currentRange);
 
-      const regionTotals = allRegions.map(region => {
+      // Compute totals for display
+      const regionTotals = [];
+      topRegs.forEach(region => {
         const total = filteredDays.reduce((s, day) => s + ((regionLocalDaily[region] && regionLocalDaily[region][day]) || 0), 0);
-        return { region, total };
-      }).filter(r => r.total > 0).sort((a, b) => {
+        if (total > 0) regionTotals.push({ region, total });
+      });
+      // Other total
+      let otherTotal = 0;
+      const otherBreakdownAll = [];
+      otherRegs.forEach(region => {
+        const total = filteredDays.reduce((s, day) => s + ((regionLocalDaily[region] && regionLocalDaily[region][day]) || 0), 0);
+        if (total > 0) {
+          otherTotal += total;
+          otherBreakdownAll.push({ region, total });
+        }
+      });
+      if (otherTotal > 0) regionTotals.push({ region: 'Other', total: otherTotal });
+
+      // Sort: Other first (bottom), then ascending
+      regionTotals.sort((a, b) => {
         if (a.region === 'Other') return -1;
         if (b.region === 'Other') return 1;
         return a.total - b.total;
@@ -1100,19 +1095,14 @@ if (!multiMode && regionChartEl) {
       const rangeKnown = regionTotals.reduce((s, r) => s + r.total, 0);
 
       // Build "Other" hover breakdown
+      otherBreakdownAll.sort((a, b) => b.total - a.total);
       let otherHover = '';
-      if (d.otherRegions) {
-        const otherBreakdown = d.otherRegions.map(region => {
-          const total = filteredDays.reduce((s, day) => s + ((otherLocalDaily[region] && otherLocalDaily[region][day]) || 0), 0);
-          return { region, total };
-        }).filter(r => r.total > 0).sort((a, b) => b.total - a.total);
-        const shown = otherBreakdown.slice(0, 20);
-        const rest = otherBreakdown.slice(20);
-        otherHover = shown.map(r => r.region + ': ' + r.total).join('<br>');
-        if (rest.length > 0) {
-          const restTotal = rest.reduce((s, r) => s + r.total, 0);
-          otherHover += '<br>...and ' + rest.length + ' more (' + restTotal + ' stars)';
-        }
+      const shown = otherBreakdownAll.slice(0, 20);
+      const rest = otherBreakdownAll.slice(20);
+      otherHover = shown.map(r => r.region + ': ' + r.total).join('<br>');
+      if (rest.length > 0) {
+        const restTotal = rest.reduce((s, r) => s + r.total, 0);
+        otherHover += '<br>...and ' + rest.length + ' more (' + restTotal + ' stars)';
       }
 
       const hoverTexts = regionTotals.map(r => {
@@ -1138,11 +1128,36 @@ if (!multiMode && regionChartEl) {
         xaxis: { title: { text: 'Total stars', font: { color: '#8b949e' } }, gridcolor: '#21262d', color: '#8b949e' },
         yaxis: { color: '#8b949e', automargin: true },
         margin: { t: 20, r: 30, b: 50, l: 120 },
-        height: Math.max(400, allRegions.length * 22),
+        height: Math.max(400, regionTotals.length * 22),
         showlegend: false,
       }, plotConfig);
+    }
+
+    // Wire up callbacks used by range/granularity handlers
+    updateRegionRange = function(rangeKey) {
+      rebuildRegionCharts();
     };
-    updateTotalsChart('all');
+
+    updateRegionGranularity = function(granularity) {
+      currentRegionGranularity = granularity;
+      rebuildRegionCharts();
+    };
+
+    updateTotalsChart = function(rangeKey) {
+      // Already handled by rebuildRegionCharts via updateRegionRange
+    };
+
+    // Top N input handler
+    topNInput.addEventListener('change', function() {
+      const val = parseInt(this.value, 10);
+      if (val >= 1 && val <= d.allRegionNames.length) {
+        currentTopN = val;
+        rebuildRegionCharts();
+      }
+    });
+
+    // Initial render of totals chart
+    rebuildTotalsChart();
   }
 }
 <\/script>
