@@ -100,11 +100,11 @@ The top N regions are recomputed based on the selected date range, so you can se
 
 ### Claude Code plugin
 
-If you use [Claude Code](https://docs.anthropic.com/en/docs/claude-code), you can install the plugin from the [ykdojo marketplace](https://github.com/ykdojo/claude-code-tips):
+If you use [Claude Code](https://docs.anthropic.com/en/docs/claude-code), you can install the plugin:
 
 ```
-/plugin marketplace add ykdojo/claude-code-tips
-/plugin install gh-star-history@ykdojo
+/plugin marketplace add ykdojo/gh-star-history
+/plugin install gh-star-history@gh-star-history
 ```
 
 Then run `/gh-star-region-breakdown <owner/repo>` to fetch stargazer locations, classify them, and generate the chart.

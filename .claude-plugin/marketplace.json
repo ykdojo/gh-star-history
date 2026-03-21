@@ -1,0 +1,13 @@
+{
+  "name": "gh-star-history",
+  "owner": {
+    "name": "ykdojo"
+  },
+  "plugins": [
+    {
+      "name": "gh-star-history",
+      "source": "./",
+      "description": "Visualize GitHub star history and regional breakdown as interactive charts"
+    }
+  ]
+}
