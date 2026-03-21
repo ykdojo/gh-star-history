@@ -13,7 +13,7 @@ Generate a region breakdown chart for: $ARGUMENTS
 Run the CLI to fetch all stargazers with locations (this caches the data):
 
 ```
-node bin/cli-region.js <owner/repo> --no-open
+npx gh-star-region <owner/repo> --no-open
 ```
 
 This will paginate through all stargazers via the GitHub GraphQL API and cache the results.
@@ -23,7 +23,7 @@ This will paginate through all stargazers via the GitHub GraphQL API and cache t
 Run the unclassified locations script:
 
 ```
-node bin/list-unclassified.js <owner/repo> > /tmp/unclassified.csv
+npx gh-star-unclassified <owner/repo> > /tmp/unclassified.csv
 ```
 
 If all locations are already classified, skip to step 5.
@@ -53,7 +53,7 @@ Merge the new classified locations into `~/.gh-star-history/location_region_map.
 Run the CLI again to generate the chart with updated mappings:
 
 ```
-node bin/cli-region.js <owner/repo>
+npx gh-star-region <owner/repo>
 ```
 
 This will open the chart in the browser automatically. Do NOT run a separate `open` command.

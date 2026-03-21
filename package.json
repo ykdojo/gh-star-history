@@ -1,9 +1,11 @@
 {
   "name": "gh-star-history",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Visualize and compare GitHub star history as interactive charts, powered by gh CLI",
   "bin": {
-    "gh-star-history": "bin/cli.js"
+    "gh-star-history": "bin/cli.js",
+    "gh-star-region": "bin/cli-region.js",
+    "gh-star-unclassified": "bin/list-unclassified.js"
   },
   "keywords": [
     "github",
