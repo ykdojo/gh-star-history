@@ -2,7 +2,7 @@
 
 ![star-history-with-regions](star-history-with-regions.png)
 
-Visualize GitHub star history and regional breakdown as interactive charts. Powered by the [GitHub CLI](https://cli.github.com/) - no API tokens needed.
+Visualize GitHub star history and regional breakdown as interactive charts. Powered by the [GitHub CLI](https://cli.github.com/) - no API tokens needed. Features date range selection, star growth tracking with period comparison, and dynamic regional breakdown.
 
 For example, if you want to see the star growth of [claude-code-tips](https://github.com/ykdojo/claude-code-tips):
 
@@ -20,7 +20,7 @@ npx gh-star-history vuejs/vue withastro/astro sveltejs/svelte
 
 ![comparison](comparison.png)
 
-Generates a self-contained HTML file with an interactive Plotly chart - hover for details, zoom into spikes, pan across time.
+Generates a self-contained HTML file with an interactive Plotly chart.
 
 ## Prerequisites
 
@@ -93,9 +93,10 @@ The region breakdown includes:
 
 - A stacked bar chart showing stars by region over time (top 5 regions per day)
 - An overall breakdown horizontal bar chart with percentages
+- Dynamic top N control - choose how many regions to show individually vs grouped into "Other"
 - Hover over "Other" to see the full breakdown of smaller regions
 
-The region data responds to the time range and daily/hourly toggles.
+The top N regions are recomputed based on the selected date range, so you can see which regions are trending in any time period.
 
 ## Development
 
