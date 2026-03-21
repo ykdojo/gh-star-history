@@ -476,6 +476,7 @@ const clientRepoData = JSON.stringify(repoData.map((d, i) => ({
   regionHourlyData: d.regionHourlyData,
   allRegionNames: d.allRegionNames,
   defaultTopN: d.defaultTopN,
+  displayCount: d.displayCount,
   knownCount: d.knownCount,
   color: multiMode ? multiColors[i % multiColors.length] : s.lineColor,
   fillColor: multiMode ? 'transparent' : s.fillColor,
@@ -738,7 +739,8 @@ if (!multiMode) {
   const barIndex = traces.length - 1;
 
   // Pre-compute timestamps for star dates
-  const starTimestamps = d.dates.map(dt => new Date(dt).getTime());
+  // Exclude the last synthetic "now" entry used to extend the chart line
+  const starTimestamps = d.dates.slice(0, -1).map(dt => new Date(dt).getTime());
 
   function countStarsInRange(startMs, endMs) {
     let count = 0;
@@ -999,6 +1001,7 @@ if (!multiMode && regionChartEl) {
     const localHours = d.regionHourlyDates ? [...new Set(d.regionHourlyDates.map(utcHour => utcToLocal(utcHour).slice(0, 13)))].sort() : [];
 
     function updateRegionSubtitle(rangeKey) {
+      const isAll = !ranges[rangeKey];
       const r = ranges[rangeKey];
       const startMs = r ? new Date(r[0]).getTime() : 0;
       const endMs = r ? new Date(r[1]).getTime() : Infinity;
@@ -1010,10 +1013,15 @@ if (!multiMode && regionChartEl) {
           knownInRange += (regionLocalDaily[region] && regionLocalDaily[region][day]) || 0;
         });
       });
-      let totalInRange = 0;
-      for (let i = 0; i < d.dates.length; i++) {
-        const t = new Date(d.dates[i]).getTime();
-        if (t >= startMs && t <= endMs) totalInRange++;
+      let totalInRange;
+      if (isAll) {
+        totalInRange = d.displayCount;
+      } else {
+        totalInRange = 0;
+        for (let i = 0; i < d.dates.length - 1; i++) {
+          const t = new Date(d.dates[i]).getTime();
+          if (t >= startMs && t <= endMs) totalInRange++;
+        }
       }
       regionSubtitleEl.textContent = knownInRange.toLocaleString() + ' of ' + totalInRange.toLocaleString() + ' stargazers have a public location set';
     }

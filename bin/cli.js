@@ -634,8 +634,8 @@ if (!multiMode) {
 
   let currentRange = 'all';
 
-  // Pre-compute timestamps for star dates
-  const starTimestamps = d.dates.map(dt => new Date(dt).getTime());
+  // Exclude the last synthetic "now" entry used to extend the chart line
+  const starTimestamps = d.dates.slice(0, -1).map(dt => new Date(dt).getTime());
 
   function countStarsInRange(startMs, endMs) {
     let count = 0;
