@@ -98,6 +98,17 @@ The region breakdown includes:
 
 The top N regions are recomputed based on the selected date range, so you can see which regions are trending in any time period.
 
+### Claude Code plugin
+
+If you use [Claude Code](https://docs.anthropic.com/en/docs/claude-code), you can install the plugin from the [ykdojo marketplace](https://github.com/ykdojo/claude-code-tips):
+
+```
+/plugin marketplace add ykdojo/claude-code-tips
+/plugin install gh-star-history@ykdojo
+```
+
+Then run `/gh-star-region-breakdown <owner/repo>` to fetch stargazer locations, classify them, and generate the chart.
+
 ## Development
 
 ```bash
