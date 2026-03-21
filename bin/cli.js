@@ -442,11 +442,16 @@ const html = `<!DOCTYPE html>
   <div class="range-buttons">
     <select id="range-select" class="range-select">
       <option value="all" selected>All Time</option>
-      <option value="year">Past Year</option>
-      <option value="month">Past Month</option>
-      <option value="week">Past Week</option>
-      <option value="day">Past 24h</option>
+      <option value="past">Past...</option>
       <option value="custom">Custom Range</option>
+    </select>
+    <select id="past-select" class="range-select" style="display:none;margin-left:8px">
+      <option value="year">Year</option>
+      <option value="6months">6 Months</option>
+      <option value="3months">3 Months</option>
+      <option value="month">Month</option>
+      <option value="week">Week</option>
+      <option value="day">24h</option>
     </select>
     <span id="custom-range" style="display:none">
       <input type="date" id="start-date" class="date-input">
@@ -572,11 +577,28 @@ const firstDate = new Date(firstDateStr).getTime();
 const lastDate = new Date(lastDateStr).getTime();
 const totalSpanMs = lastDate - firstDate;
 
-// Hide "Past Year" option if data range is less than a year
-if (totalSpanMs < 365 * 24 * 60 * 60 * 1000) {
-  const yearOpt = document.querySelector('#range-select option[value="year"]');
-  if (yearOpt) yearOpt.style.display = 'none';
-}
+// Hide past-select options that exceed the data range, default to longest visible
+const pastSelect = document.getElementById('past-select');
+const periodThresholds = [
+  { value: 'year', ms: 365*24*60*60*1000 },
+  { value: '6months', ms: 182*24*60*60*1000 },
+  { value: '3months', ms: 91*24*60*60*1000 },
+  { value: 'month', ms: 30*24*60*60*1000 },
+  { value: 'week', ms: 7*24*60*60*1000 },
+  { value: 'day', ms: 24*60*60*1000 },
+];
+let defaultPast = 'day';
+periodThresholds.forEach(p => {
+  const opt = pastSelect.querySelector('option[value="' + p.value + '"]');
+  if (totalSpanMs < p.ms) {
+    if (opt) opt.style.display = 'none';
+  } else {
+    if (!defaultPast || periodThresholds.findIndex(x => x.value === p.value) < periodThresholds.findIndex(x => x.value === defaultPast)) {
+      defaultPast = p.value;
+    }
+  }
+});
+pastSelect.value = defaultPast;
 
 // Set min/max for custom date inputs
 const startInput = document.getElementById('start-date');
@@ -593,6 +615,8 @@ if (startInput && endInput) {
 const ranges = {
   all: null,
   year: [utcToLocal(new Date(lastDate - 365*24*60*60*1000).toISOString()), lastDateStr],
+  '6months': [utcToLocal(new Date(lastDate - 182*24*60*60*1000).toISOString()), lastDateStr],
+  '3months': [utcToLocal(new Date(lastDate - 91*24*60*60*1000).toISOString()), lastDateStr],
   month: [utcToLocal(new Date(lastDate - 30*24*60*60*1000).toISOString()), lastDateStr],
   week: [utcToLocal(new Date(lastDate - 7*24*60*60*1000).toISOString()), lastDateStr],
   day: [utcToLocal(new Date(lastDate - 24*60*60*1000).toISOString()), lastDateStr],
@@ -672,11 +696,22 @@ if (!multiMode) {
 
   // Range select handler
   document.getElementById('range-select').addEventListener('change', function() {
-    currentRange = this.value;
-    customSpan.style.display = currentRange === 'custom' ? 'inline' : 'none';
-    if (currentRange === 'custom') {
+    pastSelect.style.display = this.value === 'past' ? 'inline-block' : 'none';
+    customSpan.style.display = this.value === 'custom' ? 'inline' : 'none';
+    if (this.value === 'past') {
+      currentRange = pastSelect.value;
+    } else if (this.value === 'custom') {
       ranges.custom = [startInput.value, endInput.value + 'T23:59:59'];
+      currentRange = 'custom';
+    } else {
+      currentRange = 'all';
     }
+    applyRange();
+  });
+
+  // Past period select handler
+  pastSelect.addEventListener('change', function() {
+    currentRange = this.value;
     applyRange();
   });
 
@@ -696,11 +731,29 @@ if (!multiMode) {
 } else {
   // Range select handler (multi-mode, no granularity)
   document.getElementById('range-select').addEventListener('change', function() {
-    const r = this.value;
-    customSpan.style.display = r === 'custom' ? 'inline' : 'none';
-    if (r === 'custom') {
+    pastSelect.style.display = this.value === 'past' ? 'inline-block' : 'none';
+    customSpan.style.display = this.value === 'custom' ? 'inline' : 'none';
+    let r;
+    if (this.value === 'past') {
+      r = pastSelect.value;
+    } else if (this.value === 'custom') {
       ranges.custom = [startInput.value, endInput.value + 'T23:59:59'];
+      r = 'custom';
+    } else {
+      r = 'all';
     }
+    requestAnimationFrame(() => {
+      if (ranges[r]) {
+        Plotly.relayout(chartEl, { 'xaxis.autorange': false, 'xaxis.range': ranges[r] });
+      } else {
+        Plotly.relayout(chartEl, { 'xaxis.autorange': true });
+      }
+    });
+  });
+
+  // Past period select handler (multi-mode)
+  pastSelect.addEventListener('change', function() {
+    const r = this.value;
     requestAnimationFrame(() => {
       if (ranges[r]) {
         Plotly.relayout(chartEl, { 'xaxis.autorange': false, 'xaxis.range': ranges[r] });
