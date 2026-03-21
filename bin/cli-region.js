@@ -280,7 +280,7 @@ async function fetchRepoStars(repo, onProgress) {
   }
 
   // Collect all regions sorted by total count
-  const defaultTopN = flags.top || 10;
+  const defaultTopN = flags.top || 34;
   const totalByRegion = {};
   for (const day of Object.keys(dailyRegionMap)) {
     for (const [region, count] of Object.entries(dailyRegionMap[day])) {
