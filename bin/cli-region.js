@@ -529,6 +529,21 @@ const html = `<!DOCTYPE html>
   .subtitle a:hover { text-decoration: underline; }
   #chart { width: 100%; }
   .range-buttons { text-align: center; margin-bottom: 12px; }
+  .range-select {
+    background: #161b22; color: #c9d1d9; border: 1px solid #30363d;
+    padding: 6px 12px; border-radius: 6px; cursor: pointer;
+    font-size: 13px; font-family: inherit; outline: none;
+    appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b949e' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 8px center; padding-right: 28px;
+  }
+  .range-select:hover { border-color: #58a6ff; }
+  .date-input {
+    background: #161b22; color: #c9d1d9; border: 1px solid #30363d;
+    padding: 5px 8px; border-radius: 6px; font-size: 13px; font-family: inherit;
+    outline: none; color-scheme: dark; margin-left: 8px;
+  }
+  .date-input:hover { border-color: #58a6ff; }
   .range-btn {
     background: #161b22; color: #c9d1d9; border: 1px solid #30363d;
     padding: 6px 16px; margin: 0 4px; border-radius: 6px; cursor: pointer;
@@ -546,11 +561,19 @@ const html = `<!DOCTYPE html>
   <h1>${chartTitle}</h1>
   <div class="subtitle">${chartSubtitle}</div>
   <div class="range-buttons">
-    <button class="range-btn active" data-range="all">All Time</button>
-    <button class="range-btn" data-range="year">Past Year</button>
-    <button class="range-btn" data-range="month">Past Month</button>
-    <button class="range-btn" data-range="week">Past Week</button>
-    <button class="range-btn" data-range="day">Past 24h</button>${granularityToggle}
+    <select id="range-select" class="range-select">
+      <option value="all" selected>All Time</option>
+      <option value="year">Past Year</option>
+      <option value="month">Past Month</option>
+      <option value="week">Past Week</option>
+      <option value="day">Past 24h</option>
+      <option value="custom">Custom Range</option>
+    </select>
+    <span id="custom-range" style="display:none">
+      <input type="date" id="start-date" class="date-input">
+      <span style="color:#8b949e;margin-left:8px">to</span>
+      <input type="date" id="end-date" class="date-input">
+    </span>${granularityToggle}
   </div>
   <div id="chart"></div>
   <div id="region-section" style="display:none; margin-top: 32px;">
@@ -677,10 +700,22 @@ const firstDate = new Date(firstDateStr).getTime();
 const lastDate = new Date(lastDateStr).getTime();
 const totalSpanMs = lastDate - firstDate;
 
-// Hide "Past Year" button if data range is less than a year
+// Hide "Past Year" option if data range is less than a year
 if (totalSpanMs < 365 * 24 * 60 * 60 * 1000) {
-  const yearBtn = document.querySelector('[data-range="year"]');
-  if (yearBtn) yearBtn.style.display = 'none';
+  const yearOpt = document.querySelector('#range-select option[value="year"]');
+  if (yearOpt) yearOpt.style.display = 'none';
+}
+
+// Set min/max for custom date inputs
+const startInput = document.getElementById('start-date');
+const endInput = document.getElementById('end-date');
+const customSpan = document.getElementById('custom-range');
+if (startInput && endInput) {
+  const minDate = firstDateStr.slice(0, 10);
+  const maxDate = lastDateStr.slice(0, 10);
+  startInput.min = minDate; startInput.max = maxDate;
+  endInput.min = minDate; endInput.max = maxDate;
+  startInput.value = minDate; endInput.value = maxDate;
 }
 
 const ranges = {
@@ -749,45 +784,72 @@ if (!multiMode) {
     });
   });
 
-  // Range button handlers (with granularity auto-switch)
-  document.querySelectorAll('[data-range]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('[data-range]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentRange = btn.dataset.range;
-      const autoGranularity = (currentRange === 'day' || currentRange === 'week') ? 'hourly' : 'daily';
-      setGranularity(autoGranularity);
-      updateRate();
-      requestAnimationFrame(() => {
-        const y2Title = currentBar === 'hourly' ? 'Stars / Hour' : 'Stars / Day';
-        if (ranges[currentRange]) {
-          Plotly.relayout(chartEl, { 'xaxis.autorange': false, 'xaxis.range': ranges[currentRange], 'yaxis2.title.text': y2Title });
-          if (updateRegionRange) updateRegionRange(currentRange);
-        } else {
-          Plotly.relayout(chartEl, { 'xaxis.autorange': true, 'yaxis2.title.text': y2Title });
-          if (updateRegionRange) updateRegionRange(currentRange);
-        }
-        if (updateTotalsChart) updateTotalsChart(currentRange);
-      });
+  function applyRange() {
+    const autoGranularity = (currentRange === 'day' || currentRange === 'week') ? 'hourly' : 'daily';
+    setGranularity(autoGranularity);
+    updateRate();
+    requestAnimationFrame(() => {
+      const y2Title = currentBar === 'hourly' ? 'Stars / Hour' : 'Stars / Day';
+      if (ranges[currentRange]) {
+        Plotly.relayout(chartEl, { 'xaxis.autorange': false, 'xaxis.range': ranges[currentRange], 'yaxis2.title.text': y2Title });
+        if (updateRegionRange) updateRegionRange(currentRange);
+      } else {
+        Plotly.relayout(chartEl, { 'xaxis.autorange': true, 'yaxis2.title.text': y2Title });
+        if (updateRegionRange) updateRegionRange(currentRange);
+      }
+      if (updateTotalsChart) updateTotalsChart(currentRange);
+    });
+  }
+
+  // Range select handler
+  document.getElementById('range-select').addEventListener('change', function() {
+    currentRange = this.value;
+    customSpan.style.display = currentRange === 'custom' ? 'inline' : 'none';
+    if (currentRange === 'custom') {
+      ranges.custom = [startInput.value, endInput.value + 'T23:59:59'];
+    }
+    applyRange();
+  });
+
+  // Custom date input handlers
+  [startInput, endInput].forEach(input => {
+    input.addEventListener('change', () => {
+      if (startInput.value && endInput.value) {
+        ranges.custom = [startInput.value, endInput.value + 'T23:59:59'];
+        currentRange = 'custom';
+        applyRange();
+      }
     });
   });
 
   // Initial rate
   updateRate();
 } else {
-  // Range button handlers (multi-mode, no granularity)
-  document.querySelectorAll('[data-range]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('[data-range]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      const r = btn.dataset.range;
-      requestAnimationFrame(() => {
-        if (ranges[r]) {
-          Plotly.relayout(chartEl, { 'xaxis.autorange': false, 'xaxis.range': ranges[r] });
-        } else {
-          Plotly.relayout(chartEl, { 'xaxis.autorange': true });
-        }
-      });
+  // Range select handler (multi-mode, no granularity)
+  document.getElementById('range-select').addEventListener('change', function() {
+    const r = this.value;
+    customSpan.style.display = r === 'custom' ? 'inline' : 'none';
+    if (r === 'custom') {
+      ranges.custom = [startInput.value, endInput.value + 'T23:59:59'];
+    }
+    requestAnimationFrame(() => {
+      if (ranges[r]) {
+        Plotly.relayout(chartEl, { 'xaxis.autorange': false, 'xaxis.range': ranges[r] });
+      } else {
+        Plotly.relayout(chartEl, { 'xaxis.autorange': true });
+      }
+    });
+  });
+
+  // Custom date input handlers (multi-mode)
+  [startInput, endInput].forEach(input => {
+    input.addEventListener('change', () => {
+      if (startInput.value && endInput.value) {
+        ranges.custom = [startInput.value, endInput.value + 'T23:59:59'];
+        requestAnimationFrame(() => {
+          Plotly.relayout(chartEl, { 'xaxis.autorange': false, 'xaxis.range': ranges.custom });
+        });
+      }
     });
   });
 }
