@@ -1040,6 +1040,26 @@ if (!multiMode && regionChartEl) {
     Plotly.newPlot(regionChartEl, buildRegionTraces(displayRegions, traceData, 'daily'), regionLayout, plotConfig);
 
     // Full rebuild of both region charts
+    // Compute max stacked y value within a date range for the region chart
+    function getRegionYMax(gran, displayRegs, td) {
+      const r = ranges[currentRange];
+      const startMs = r ? new Date(r[0]).getTime() : 0;
+      const endMs = r ? new Date(r[1]).getTime() : Infinity;
+      const xVals = td[gran][displayRegs[0]].x;
+      let maxStack = 0;
+      for (let i = 0; i < xVals.length; i++) {
+        const t = new Date(xVals[i]).getTime();
+        if (t < startMs || t > endMs) continue;
+        let stack = 0;
+        for (const region of displayRegs) {
+          const v = td[gran][region].y[i];
+          if (v) stack += v;
+        }
+        if (stack > maxStack) maxStack = stack;
+      }
+      return maxStack;
+    }
+
     function rebuildRegionCharts() {
       const result = computeTopRegions(currentTopN, currentRange);
       topRegions = result.topRegions;
@@ -1050,12 +1070,16 @@ if (!multiMode && regionChartEl) {
       const gran = currentRegionGranularity;
       const yTitle = gran === 'hourly' ? 'Stars / Hour' : 'Stars / Day';
       const r = ranges[currentRange];
+      const yMax = getRegionYMax(gran, displayRegions, traceData);
 
       // Rebuild stacked bar chart
-      const layout = Object.assign({}, regionLayout, { yaxis: Object.assign({}, regionLayout.yaxis, { title: { text: yTitle, font: { color: '#8b949e' } } }) });
-      if (r) {
-        layout.xaxis = Object.assign({}, layout.xaxis, { autorange: false, range: r });
-      }
+      const layout = Object.assign({}, regionLayout, {
+        yaxis: Object.assign({}, regionLayout.yaxis, {
+          title: { text: yTitle, font: { color: '#8b949e' } },
+          autorange: false, range: [0, yMax > 0 ? yMax * 1.1 : 1],
+        }),
+        xaxis: r ? Object.assign({}, regionLayout.xaxis, { autorange: false, range: r }) : Object.assign({}, regionLayout.xaxis, { autorange: true }),
+      });
       Plotly.react(regionChartEl, buildRegionTraces(displayRegions, traceData, gran), layout, plotConfig);
 
       // Rebuild totals chart
