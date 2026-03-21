@@ -1,0 +1,11 @@
+{
+  "name": "gh-star-history",
+  "description": "Visualize GitHub star history and regional breakdown as interactive charts",
+  "version": "0.4.1",
+  "author": {
+    "name": "ykdojo"
+  },
+  "homepage": "https://github.com/ykdojo/gh-star-history",
+  "repository": "https://github.com/ykdojo/gh-star-history",
+  "license": "MIT"
+}
