@@ -1065,15 +1065,15 @@ if (!multiMode && regionChartEl) {
           });
           otherVals[bucket] = other;
         });
-        // Top 5 per bucket for stacked chart visibility
-        const top5PerBucket = {};
+        // Top 7 per bucket for stacked chart visibility
+        const top7PerBucket = {};
         timeBuckets.forEach(bucket => {
           const entries = displayRegions
             .map(c => ({ c, v: c === 'Other' ? otherVals[bucket] : ((regionLocal[c] && regionLocal[c][bucket]) || 0) }))
             .filter(e => e.v > 0)
             .sort((a, b) => b.v - a.v)
-            .slice(0, 5);
-          top5PerBucket[bucket] = new Set(entries.map(e => e.c));
+            .slice(0, 7);
+          top7PerBucket[bucket] = new Set(entries.map(e => e.c));
         });
         const xVals = gran === 'hourly' ? timeBuckets.map(h => h + ':00:00') : timeBuckets;
         td[gran] = {};
@@ -1082,7 +1082,7 @@ if (!multiMode && regionChartEl) {
             x: xVals,
             y: timeBuckets.map(bucket => {
               const v = region === 'Other' ? otherVals[bucket] : ((regionLocal[region] && regionLocal[region][bucket]) || 0);
-              if (v === 0 || !top5PerBucket[bucket].has(region)) return null;
+              if (v === 0 || !top7PerBucket[bucket].has(region)) return null;
               return v;
             })
           };

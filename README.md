@@ -91,7 +91,7 @@ You can also generate a region breakdown chart showing where stargazers are from
 
 The region breakdown includes:
 
-- A stacked bar chart showing stars by region over time (top 5 regions per day)
+- A stacked bar chart showing stars by region over time (top 7 regions per day)
 - An overall breakdown horizontal bar chart with percentages
 - Dynamic top N control - choose how many regions to show individually vs grouped into "Other"
 - Hover over "Other" to see the full breakdown of smaller regions
