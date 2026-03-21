@@ -967,7 +967,7 @@ if (!multiMode && regionChartEl) {
   const d = repoData[0];
   if (d.regionDailyDates && d.allRegionNames && d.allRegionNames.length > 0) {
     document.getElementById('region-section').style.display = 'block';
-    document.getElementById('region-subtitle').textContent = d.knownCount + ' of ' + (d.dates.length - 1) + ' stargazers have a public location set';
+    const regionSubtitleEl = document.getElementById('region-subtitle');
 
     // Set up top N input
     const topNInput = document.getElementById('top-n-input');
@@ -997,6 +997,27 @@ if (!multiMode && regionChartEl) {
     }
     const localDays = [...new Set(d.regionDailyDates.map(utcDay => utcToLocal(utcDay + 'T12:00:00Z').slice(0, 10)))].sort();
     const localHours = d.regionHourlyDates ? [...new Set(d.regionHourlyDates.map(utcHour => utcToLocal(utcHour).slice(0, 13)))].sort() : [];
+
+    function updateRegionSubtitle(rangeKey) {
+      const r = ranges[rangeKey];
+      const startMs = r ? new Date(r[0]).getTime() : 0;
+      const endMs = r ? new Date(r[1]).getTime() : Infinity;
+      let knownInRange = 0;
+      localDays.forEach(day => {
+        const t = new Date(day).getTime();
+        if (t < startMs || t > endMs) return;
+        d.allRegionNames.forEach(region => {
+          knownInRange += (regionLocalDaily[region] && regionLocalDaily[region][day]) || 0;
+        });
+      });
+      let totalInRange = 0;
+      for (let i = 0; i < d.dates.length; i++) {
+        const t = new Date(d.dates[i]).getTime();
+        if (t >= startMs && t <= endMs) totalInRange++;
+      }
+      regionSubtitleEl.textContent = knownInRange.toLocaleString() + ' of ' + totalInRange.toLocaleString() + ' stargazers have a public location set';
+    }
+    updateRegionSubtitle('all');
 
     let currentRegionGranularity = 'daily';
 
@@ -1129,6 +1150,7 @@ if (!multiMode && regionChartEl) {
       otherRegions = result.otherRegions;
       displayRegions = [...topRegions, 'Other'];
       traceData = buildTraceData(topRegions);
+      updateRegionSubtitle(currentRange);
 
       const gran = currentRegionGranularity;
       const yTitle = gran === 'hourly' ? 'Stars / Hour' : 'Stars / Day';
