@@ -794,15 +794,9 @@ if (!multiMode) {
       }
     }
 
-    let rateText;
-    if (currentBar === 'hourly') {
-      const perHour = hours > 0 ? (starsInRange / hours).toFixed(2) : '0';
-      rateText = perHour + ' stars/hour';
-    } else {
-      const days = hours / 24;
-      const perDay = days > 0 ? (starsInRange / days).toFixed(1) : '0';
-      rateText = perDay + ' stars/day';
-    }
+    const days = hours / 24;
+    const perDay = days > 0 ? (starsInRange / days).toFixed(1) : '0';
+    let rateText = perDay + ' stars/day';
 
     // Compare with previous equivalent period
     const durationMs = rangeEnd - rangeStart;
