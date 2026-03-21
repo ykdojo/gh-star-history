@@ -130,12 +130,6 @@ function saveRepoCache(repo, data) {
 
 // --- Progress display ---
 
-function shortNum(n) {
-  if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'm';
-  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
-  return String(n);
-}
-
 // Shared progress state for multi-mode
 const progress = {};
 let progressRendered = false;
@@ -149,9 +143,12 @@ function renderProgress() {
     const p = progress[repo];
     let status;
     if (!p) status = 'waiting...';
-    else if (p.done) status = `${shortNum(p.total)} done`;
+    else if (p.done) status = `${p.total.toLocaleString()} done`;
     else if (p.error) status = `error: ${p.error}`;
-    else status = `${shortNum(p.fetched)} / ${p.total ? p.total.toLocaleString() : '?'}${p.cached ? ' (cached)' : ''}`;
+    else {
+      const fetchedNum = p.total ? Math.min(p.fetched, p.total) : p.fetched;
+      status = `${fetchedNum.toLocaleString()} / ${p.total ? p.total.toLocaleString() : '?'}${p.cached ? ' (cached)' : ''}`;
+    }
     process.stdout.write(`\r  ${repo}: ${status}\x1b[K\n`);
   }
   progressRendered = true;
@@ -303,7 +300,8 @@ async function main() {
     const repo = repoList[0];
     try {
       const data = await fetchRepoStars(repo, (p) => {
-        const fetched = shortNum(p.fetched);
+        const fetchedNum = p.total ? Math.min(p.fetched, p.total) : p.fetched;
+        const fetched = fetchedNum.toLocaleString();
         const total = p.total ? p.total.toLocaleString() : '?';
         const cached = p.cached ? ' (cached)' : '';
         process.stdout.write(`\r  ${repo}: ${fetched} / ${total} stars${cached}\x1b[K`);
