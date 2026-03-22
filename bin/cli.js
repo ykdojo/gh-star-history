@@ -683,9 +683,12 @@ if (!multiMode) {
         }
         starInfoEl.textContent = d.cumulative[d.cumulative.length - 1].toLocaleString() + ' stars (over ' + duration + ')';
       } else {
-        const startCount = countStarsBefore(rangeStart);
-        const endCount = startCount + starsInRange;
-        starInfoEl.innerHTML = startCount.toLocaleString() + ' \u2192 ' + endCount.toLocaleString() + ' <span style="color:#3fb950">(+' + starsInRange.toLocaleString() + ' stars)</span>';
+        const maxStars = d.cumulative[d.cumulative.length - 1];
+        const rawStart = countStarsBefore(rangeStart);
+        const startCount = Math.min(rawStart, maxStars);
+        const endCount = Math.min(rawStart + starsInRange, maxStars);
+        const gain = endCount - startCount;
+        starInfoEl.innerHTML = startCount.toLocaleString() + ' \u2192 ' + endCount.toLocaleString() + ' <span style="color:#3fb950">(+' + gain.toLocaleString() + ' stars)</span>';
       }
     }
 
