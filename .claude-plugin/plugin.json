@@ -1,7 +1,7 @@
 {
   "name": "gh-star-history",
   "description": "Visualize GitHub star history and regional breakdown as interactive charts",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "author": {
     "name": "ykdojo"
   },
