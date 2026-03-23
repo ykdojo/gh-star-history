@@ -1057,8 +1057,8 @@ if (!multiMode && regionChartEl) {
     d.allRegionNames.forEach((region, i) => { colorByRegion[region] = regionColors[i % regionColors.length]; });
 
     // Build trace data for a set of display regions (topRegions + Other)
-    function buildTraceData(topRegions) {
-      const displayRegions = [...topRegions, 'Other'];
+    function buildTraceData(topRegions, includeOther) {
+      const displayRegions = includeOther ? [...topRegions, 'Other'] : [...topRegions];
       const td = {};
       ['daily', 'hourly'].forEach(gran => {
         const timeBuckets = gran === 'hourly' ? localHours : localDays;
@@ -1102,8 +1102,9 @@ if (!multiMode && regionChartEl) {
 
     // Initial computation
     let { topRegions, otherRegions } = computeTopRegions(currentTopN, 'all');
-    let displayRegions = [...topRegions, 'Other'];
-    let traceData = buildTraceData(topRegions);
+    let hasOther = otherRegions.length > 0;
+    let displayRegions = hasOther ? [...topRegions, 'Other'] : [...topRegions];
+    let traceData = buildTraceData(topRegions, hasOther);
 
     // Build initial traces (daily)
     function buildRegionTraces(displayRegs, td, gran) {
@@ -1159,8 +1160,9 @@ if (!multiMode && regionChartEl) {
       const result = computeTopRegions(currentTopN, currentRange);
       topRegions = result.topRegions;
       otherRegions = result.otherRegions;
-      displayRegions = [...topRegions, 'Other'];
-      traceData = buildTraceData(topRegions);
+      hasOther = otherRegions.length > 0;
+      displayRegions = hasOther ? [...topRegions, 'Other'] : [...topRegions];
+      traceData = buildTraceData(topRegions, hasOther);
       updateRegionSubtitle(currentRange);
 
       const gran = currentRegionGranularity;
